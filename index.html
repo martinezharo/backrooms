@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Backrooms — Free Browser Horror Game · No Download, Play Instantly</title>
+  <meta name="description" content="Play The Backrooms free in your browser: a first-person survival horror game set in an infinite procedurally generated maze, hunted by entities that stalk you from the dark. No download, no install, no sign-up — click and play." />
+  <meta name="keywords" content="backrooms, backrooms game, free horror game, browser horror game, no download games, play backrooms online, survival horror online, webgl horror game, free online games" />
+  <meta name="robots" content="index, follow" />
+  <meta name="theme-color" content="#0e0c04" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="The Backrooms — Free Browser Horror Game (No Download)" />
+  <meta property="og:description" content="An infinite yellow maze. Entities that hunt you. 100% free, plays instantly in your browser — no download, no sign-up." />
+  <meta property="og:site_name" content="The Backrooms" />
+  <meta property="og:locale" content="en_US" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="The Backrooms — Free Browser Horror Game (No Download)" />
+  <meta name="twitter:description" content="An infinite yellow maze. Entities that hunt you. 100% free, plays instantly in your browser." />
+
+  <!-- Structured data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "VideoGame",
+    "name": "The Backrooms",
+    "description": "Free first-person survival horror game playable directly in the browser. Explore an infinite procedurally generated backrooms maze, scavenge weapons, manage thirst and evade entities that stalk you. No download or installation required.",
+    "genre": ["Horror", "Survival"],
+    "playMode": "SinglePlayer",
+    "gamePlatform": "Web Browser",
+    "applicationCategory": "Game",
+    "operatingSystem": "Any (web browser with WebGL)",
+    "isAccessibleForFree": true,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD", "availability": "https://schema.org/InStock" }
+  }
+  </script>
+
+  <!-- Favicon: the Smiler, inline SVG — no asset files -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230a0903'/%3E%3Ccircle cx='32' cy='30' r='27' fill='%23e8d989' opacity='0.07'/%3E%3Cellipse cx='22' cy='23' rx='8' ry='6.5' fill='%23ffffff' opacity='0.16'/%3E%3Cellipse cx='42' cy='23' rx='8' ry='6.5' fill='%23ffffff' opacity='0.16'/%3E%3Cellipse cx='22' cy='23' rx='5.2' ry='3.8' fill='%23ffffff'/%3E%3Cellipse cx='42' cy='23' rx='5.2' ry='3.8' fill='%23ffffff'/%3E%3Ccircle cx='23.5' cy='23.5' r='1.4' fill='%230a0903'/%3E%3Ccircle cx='43.5' cy='23.5' r='1.4' fill='%230a0903'/%3E%3Cpath d='M10 34 Q32 58 54 34 Q32 46 10 34 Z' fill='%23ffffff'/%3E%3Cg stroke='%230a0903' stroke-width='1.7'%3E%3Cpath d='M17 36v6M22 38v8M27 39v9M32 40v9M37 39v9M42 38v8M47 36v6'/%3E%3C/g%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="game-canvas"></canvas>
+
+    <!-- In-game HUD -->
+    <div id="hud" class="hidden">
+      <div id="crosshair"></div>
+      <div id="stats-bars">
+        <div class="bar-row">
+          <span class="bar-icon health" aria-label="health">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M12 21C5.4 14.4 2 10.8 2 7.6 2 5 4 3 6.5 3c1.7 0 3.4.9 4.4 2.4l1.1 1.5 1.1-1.5C14.1 3.9 15.8 3 17.5 3 20 3 22 5 22 7.6c0 3.2-3.4 6.8-10 13.4z"/></svg>
+          </span>
+          <div class="bar-track"><div id="health-fill" class="bar-fill health"></div></div>
+        </div>
+        <div class="bar-row">
+          <span class="bar-icon thirst" aria-label="thirst">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M12 2.2C8.4 7.4 5.4 10.8 5.4 14.6a6.6 6.6 0 0 0 13.2 0c0-3.8-3-7.2-6.6-12.4z"/></svg>
+          </span>
+          <div class="bar-track"><div id="thirst-fill" class="bar-fill thirst"></div></div>
+        </div>
+      </div>
+      <div id="interact-prompt" class="hidden"></div>
+      <div id="equipped-label"></div>
+      <div id="fps-counter"></div>
+      <div id="damage-vignette"></div>
+      <div id="biome-label"></div>
+      <div id="hotbar"></div>
+    </div>
+
+    <!-- Inventory overlay -->
+    <div id="inventory-screen" class="overlay hidden">
+      <div id="inventory-panel">
+        <h2>INVENTORY</h2>
+        <div id="inventory-weight"></div>
+        <div id="inventory-grid"></div>
+        <div id="inventory-hint">Click: equip / unequip &nbsp;·&nbsp; Hover: inspect &nbsp;·&nbsp; Drag out of the bag: drop &nbsp;·&nbsp; G: drop equipped &nbsp;·&nbsp; TAB: close</div>
+      </div>
+      <canvas id="inspect-canvas" width="280" height="280" class="hidden"></canvas>
+      <div id="inspect-label" class="hidden"></div>
+    </div>
+
+    <!-- Landing page / start screen -->
+    <div id="start-screen" class="overlay menu-screen landing">
+      <header class="landing-hero">
+        <h1 class="game-title">THE BACKROOMS</h1>
+        <p class="tagline">you noclipped out of reality</p>
+        <div class="badges">
+          <span class="badge">100% free</span>
+          <span class="badge">no download</span>
+          <span class="badge">no sign-up</span>
+          <span class="badge">plays in your browser</span>
+        </div>
+        <button id="btn-start" class="menu-btn big">DESCEND — PLAY FREE</button>
+        <p class="warn">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M12 3a8 8 0 0 0-8 8v6a2.2 2.2 0 0 0 2.2 2.2H8V13H6.2v-2a5.8 5.8 0 0 1 11.6 0v2H16v6.2h1.8A2.2 2.2 0 0 0 20 17v-6a8 8 0 0 0-8-8z"/></svg>
+          headphones strongly recommended
+        </p>
+      </header>
+
+      <main class="landing-main">
+        <section class="landing-intro">
+          <h2>A free survival horror game — right in your browser</h2>
+          <p>
+            The Backrooms is a first-person survival horror game that runs entirely in your web browser.
+            There is nothing to download, nothing to install and no account to create:
+            press play and you are inside the endless yellow halls. Free, instant, on any modern computer.
+          </p>
+        </section>
+
+        <div class="feature-grid">
+          <section class="feature">
+            <h3>An infinite maze</h3>
+            <p>Every run is procedurally generated — mono-yellow office halls, pitch-black pipe tunnels, the flooded poolrooms. No two descents are ever the same.</p>
+          </section>
+          <section class="feature">
+            <h3>You are being hunted</h3>
+            <p>Four entities stalk the levels. They follow out of sight, freeze when you spot them, slip behind corners — and strike the moment you look away.</p>
+          </section>
+          <section class="feature">
+            <h3>Scavenge &amp; survive</h3>
+            <p>Find weapons, a flashlight and ammunition. Manage your thirst, drink from rusty taps, and decide when to fight and when to run.</p>
+          </section>
+          <section class="feature">
+            <h3>Sound is everything</h3>
+            <p>Every noise is synthesized live: the fluorescent hum, your heartbeat, and the whispers that mean something is close. Positional 3D audio — trust your ears.</p>
+          </section>
+        </div>
+
+        <section class="landing-controls controls-help">
+          <h3>Controls</h3>
+          <p>WASD move · Mouse look · Space jump · C/Ctrl crouch · Shift run</p>
+          <p>E interact · LMB attack · RMB block/aim · TAB inventory · G drop held item · F torch</p>
+          <p>1–9/0 quick equip · mouse wheel cycle items</p>
+        </section>
+      </main>
+
+      <footer class="landing-footer">
+        <p>The Backrooms — a free WebGL horror game. No download · no install · no ads · works in Chrome, Firefox, Edge and Safari.</p>
+      </footer>
+    </div>
+
+    <!-- Pause menu -->
+    <div id="pause-screen" class="overlay menu-screen hidden">
+      <h1 class="game-title small">PAUSED</h1>
+      <button id="btn-resume" class="menu-btn">RESUME</button>
+      <button id="btn-restart" class="menu-btn">RESTART</button>
+    </div>
+
+    <!-- Game over -->
+    <div id="gameover-screen" class="overlay menu-screen hidden">
+      <h1 class="game-title red">YOU DIED</h1>
+      <p id="gameover-cause" class="tagline"></p>
+      <p id="gameover-stats" class="tagline"></p>
+      <button id="btn-respawn" class="menu-btn">WAKE UP AGAIN</button>
+    </div>
+  </div>
+
+  <noscript>
+    <p>The Backrooms is a free browser horror game with no download required — but it needs JavaScript and WebGL enabled to run.</p>
+  </noscript>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
