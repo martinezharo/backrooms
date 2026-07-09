@@ -12,6 +12,9 @@ export class HUD {
   private biome = document.getElementById('biome-label')!;
   private damageVignette = document.getElementById('damage-vignette')!;
   private hotbar = document.getElementById('hotbar')!;
+  private friendSpeech = document.getElementById('friend-speech')!;
+  private heartBurst = document.getElementById('heart-burst')!;
+  private friendSpeechTimer: number | null = null;
   private hotbarSig = '';
 
   private biomeShown = '';
@@ -69,6 +72,35 @@ export class HUD {
         el.appendChild(drop);
       }
       this.hotbar.appendChild(el);
+    }
+  }
+
+  /** Easter egg: the freshly hugged monster gets a word in. */
+  showFriendSpeech(name: string, text: string): void {
+    this.friendSpeech.textContent = '';
+    const who = document.createElement('span');
+    who.className = 'friend-name';
+    who.textContent = name;
+    this.friendSpeech.append(who, `“${text}”`);
+    this.friendSpeech.classList.add('visible');
+    if (this.friendSpeechTimer !== null) clearTimeout(this.friendSpeechTimer);
+    this.friendSpeechTimer = window.setTimeout(
+      () => this.friendSpeech.classList.remove('visible'), 5000);
+  }
+
+  /** Easter egg: a screenful of cute hearts floating up. */
+  burstHearts(): void {
+    const emojis = ['💖', '💕', '💗', '💓', '❤️', '💘', '💞'];
+    for (let i = 0; i < 28; i++) {
+      const h = document.createElement('span');
+      h.className = 'burst-heart';
+      h.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+      h.style.left = `${Math.random() * 96}%`;
+      h.style.fontSize = `${16 + Math.random() * 26}px`;
+      h.style.animationDuration = `${2.2 + Math.random() * 2}s`;
+      h.style.animationDelay = `${Math.random() * 0.9}s`;
+      h.addEventListener('animationend', () => h.remove());
+      this.heartBurst.appendChild(h);
     }
   }
 

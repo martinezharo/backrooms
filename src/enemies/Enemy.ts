@@ -24,6 +24,27 @@ export type EnemyState = 'wander' | 'stalk' | 'chase' | 'attack' | 'flee' | 'stu
 const _camFwd = new THREE.Vector3();
 const _toMe = new THREE.Vector3();
 
+// shared sprite texture for the hearts that orbit a befriended entity
+let _heartTex: THREE.CanvasTexture | null = null;
+function heartTexture(): THREE.CanvasTexture {
+  if (_heartTex) return _heartTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  g.translate(32, 30);
+  g.fillStyle = '#ffffff';
+  g.beginPath();
+  g.moveTo(0, 20);
+  g.bezierCurveTo(-26, 2, -20, -22, 0, -8);
+  g.bezierCurveTo(20, -22, 26, 2, 0, 20);
+  g.fill();
+  _heartTex = new THREE.CanvasTexture(c);
+  _heartTex.colorSpace = THREE.SRGBColorSpace;
+  return _heartTex;
+}
+
+const HEART_COLORS = [0xff5ca8, 0xff8ac2, 0xffb3d9, 0xff77b5, 0xffd0e6];
+
 interface PathNode { gi: number; gj: number; g: number; f: number; parent: PathNode | null; }
 
 export abstract class Enemy {
@@ -62,6 +83,8 @@ export abstract class Enemy {
   alive = true;
   /** set when hp hits 0; Spawner removes after the death animation */
   removeMe = false;
+  /** easter egg: hugged monsters turn friendly and tag along forever */
+  befriended = false;
 
   protected stunTimer = 0;
   protected attackTimer = 0;
@@ -91,6 +114,7 @@ export abstract class Enemy {
   private velocity = new THREE.Vector3();
   private solids: AABB[] = [];
   private flashables: { mat: THREE.MeshStandardMaterial | THREE.MeshBasicMaterial; col: THREE.Color }[] = [];
+  private heartSprites: THREE.Sprite[] = [];
 
   /** subclass speed modifier per frame (e.g. Smiler in light) */
   protected speedMult = 1;
@@ -119,7 +143,8 @@ export abstract class Enemy {
     if (knockDir) {
       this.velocity.add(knockDir.clone().setY(0).normalize().multiplyScalar(2.5));
     }
-    if (this.state === 'wander' || this.state === 'stalk') this.state = 'chase';
+    // a friend forgives — it never turns hostile again
+    if (!this.befriended && (this.state === 'wander' || this.state === 'stalk')) this.state = 'chase';
     if (this.hp <= 0) {
       this.alive = false;
       this.deathTimer = 0.8;
@@ -127,9 +152,36 @@ export abstract class Enemy {
   }
 
   stun(seconds: number): void {
-    if (!this.alive) return;
+    if (!this.alive || this.befriended) return;
     this.stunTimer = Math.max(this.stunTimer, seconds);
     this.state = 'stunned';
+  }
+
+  /** Easter egg: a hug turns the monster into a loyal companion. */
+  befriend(): void {
+    if (!this.alive || this.befriended) return;
+    this.befriended = true;
+    this.state = 'wander';
+    this.stunTimer = 0;
+    this.boldness = 0;
+    this.frozen = false;
+    this.path = [];
+    this.pathTimer = 0;
+    const tex = heartTexture();
+    for (let i = 0; i < 5; i++) {
+      const mat = new THREE.SpriteMaterial({
+        map: tex,
+        color: HEART_COLORS[i % HEART_COLORS.length],
+        transparent: true,
+        opacity: 0.95,
+        depthWrite: false,
+      });
+      const s = new THREE.Sprite(mat);
+      const sc = 0.14 + Math.random() * 0.08;
+      s.scale.set(sc, sc, 1);
+      this.mesh.add(s);
+      this.heartSprites.push(s);
+    }
   }
 
   update(dt: number, ctx: EnemyContext): void {
@@ -149,6 +201,11 @@ export abstract class Enemy {
 
     const toPlayer = ctx.player.position.clone().sub(this.position);
     const distToPlayer = toPlayer.length();
+
+    if (this.befriended) {
+      this.updateFriend(dt, ctx, distToPlayer);
+      return;
+    }
 
     if (this.stunTimer > 0) {
       this.stunTimer -= dt;
@@ -207,15 +264,7 @@ export abstract class Enemy {
     const faceTarget = this.state === 'chase' || (this.state === 'stalk' && this.frozen)
       ? ctx.player.position
       : this.position.clone().add(moveDir);
-    const fdx = faceTarget.x - this.position.x;
-    const fdz = faceTarget.z - this.position.z;
-    if (Math.abs(fdx) + Math.abs(fdz) > 0.05) {
-      const targetYaw = Math.atan2(fdx, fdz);
-      let d = targetYaw - this.mesh.rotation.y;
-      while (d > Math.PI) d -= Math.PI * 2;
-      while (d < -Math.PI) d += Math.PI * 2;
-      this.mesh.rotation.y += d * Math.min(1, dt * 7);
-    }
+    this.faceToward(faceTarget, dt);
 
     this.updateHead(dt, ctx, distToPlayer);
 
@@ -225,6 +274,52 @@ export abstract class Enemy {
     if (this.twitchTimer <= 0) {
       this.twitch = 1;
       this.twitchTimer = 3 + Math.random() * 7;
+    }
+  }
+
+  /** Befriended companion: tag along at heel distance, hearts in tow.
+   *  No stalking, no attacks — just love. */
+  private updateFriend(dt: number, ctx: EnemyContext, distToPlayer: number): void {
+    this.speedMult = 1;
+    const moveDir = new THREE.Vector3();
+    if (distToPlayer > 3.2) {
+      // sprint to catch up when left far behind, walk when close
+      this.followPath(dt, ctx.world, ctx.player.position, moveDir, distToPlayer > 12 ? 1.6 : 1);
+    }
+    // even the slow ones keep pace — friendship finds a way
+    const followSpeed = Math.max(this.speed, 3.4);
+    const moved = this.applyMovement(dt, ctx, moveDir.multiplyScalar(followSpeed));
+    this.walkPhase += moved * 2.2;
+    this.animate(dt, moved / Math.max(dt, 1e-4), ctx);
+
+    const faceTarget = moveDir.lengthSq() > 1e-4
+      ? this.position.clone().add(moveDir)
+      : ctx.player.position;
+    this.faceToward(faceTarget, dt);
+    this.updateHead(dt, ctx, distToPlayer);
+
+    // cute hearts drifting in slow orbits around the body
+    const n = this.heartSprites.length;
+    for (let i = 0; i < n; i++) {
+      const s = this.heartSprites[i];
+      const a = ctx.time * 0.8 + (i * Math.PI * 2) / n;
+      s.position.set(
+        Math.cos(a) * 0.55,
+        this.bodyHeight * (0.45 + i * 0.08) + Math.sin(ctx.time * 1.6 + i * 1.3) * 0.18,
+        Math.sin(a) * 0.55,
+      );
+    }
+  }
+
+  private faceToward(target: THREE.Vector3, dt: number): void {
+    const fdx = target.x - this.position.x;
+    const fdz = target.z - this.position.z;
+    if (Math.abs(fdx) + Math.abs(fdz) > 0.05) {
+      const targetYaw = Math.atan2(fdx, fdz);
+      let d = targetYaw - this.mesh.rotation.y;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      this.mesh.rotation.y += d * Math.min(1, dt * 7);
     }
   }
 
