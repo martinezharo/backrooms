@@ -11,6 +11,11 @@ const REACH = 22; // only fixtures within this radius get a real light
 
 const FLASHLIGHT_INTENSITY = 200;
 
+// Auto-iris: beyond this distance the beam runs at full power; closer
+// subjects dim it so ACES doesn't blow them out to pure white.
+const IRIS_DIST = 6;
+const IRIS_MIN = 0.05;
+
 export class Lighting {
   private pool: THREE.PointLight[] = [];
   private ambient: THREE.AmbientLight;
@@ -21,6 +26,10 @@ export class Lighting {
   private threat = 0;
   /** current brightness multiplier after threat dimming + flicker */
   private dimFactor = 1;
+  /** distance to the nearest entity in front of the camera (fed by Game) */
+  private subjectDist = Infinity;
+  /** smoothed auto-iris exposure factor */
+  private iris = 1;
 
   private world: World;
 
@@ -51,6 +60,11 @@ export class Lighting {
   /** Feed the nearest-entity proximity (0 = nothing near, 1 = touching). */
   setThreat(level: number): void {
     this.threat += (THREE.MathUtils.clamp(level, 0, 1) - this.threat) * 0.12;
+  }
+
+  /** Distance to the nearest entity inside the beam cone (for the auto-iris). */
+  setSubjectDistance(d: number): void {
+    this.subjectDist = d;
   }
 
   /** Is a world point inside the flashlight beam? (used by Smilers) */
@@ -130,6 +144,32 @@ export class Lighting {
       .add(dir.clone().multiplyScalar(0.25))
       .add(new THREE.Vector3(0.12, -0.18, 0));
     this.flashlight.position.lerp(pos, 0.5);
+
+    // auto-iris: how far away is whatever the beam is pointed at?
+    let subject = Math.min(IRIS_DIST, this.subjectDist);
+    const horiz = Math.hypot(dir.x, dir.z);
+    if (horiz > 0.05) {
+      const wallD = this.world.raycastWall(
+        px, pz,
+        px + (dir.x / horiz) * IRIS_DIST,
+        pz + (dir.z / horiz) * IRIS_DIST,
+      );
+      if (wallD !== null) subject = Math.min(subject, wallD / horiz);
+    }
+    if (dir.y < -0.05) {
+      const floorY = this.world.groundHeight(px + dir.x * 1.5, pz + dir.z * 1.5, 0.3, camera.position.y, 4);
+      subject = Math.min(subject, (camera.position.y - floorY) / -dir.y);
+    } else if (dir.y > 0.05) {
+      const ceilY = this.world.ceilHeight(px + dir.x * 1.5, pz + dir.z * 1.5);
+      if (isFinite(ceilY)) subject = Math.min(subject, (ceilY - camera.position.y) / dir.y);
+    }
+    // keep the lit subject's apparent brightness roughly what a mid-range wall
+    // gets at full power, instead of nuking close surfaces to white
+    const irisTarget = THREE.MathUtils.clamp(
+      Math.pow(Math.max(subject, 0.01) / IRIS_DIST, 1.3), IRIS_MIN, 1,
+    );
+    this.iris += (irisTarget - this.iris) * 0.18;
+
     const targetPos = camera.position.clone().add(dir.multiplyScalar(12));
     this.flashlight.target.position.lerp(targetPos, 0.35);
 
@@ -144,7 +184,11 @@ export class Lighting {
         : 1 - this.threat * 0.3 * (0.5 + 0.5 * Math.sin(time * 47));
     }
     this.dimFactor = Math.pow(1 - this.threat, 1.6) * flicker;
-    const target = this.flashlightOn ? Math.max(2, FLASHLIGHT_INTENSITY * this.dimFactor) : 0;
+    // iris is exposure adaptation, not light output — dimFactor (which drives
+    // the Smiler-repelling beam check) stays independent of it
+    const target = this.flashlightOn
+      ? Math.max(2, FLASHLIGHT_INTENSITY * this.dimFactor * this.iris)
+      : 0;
     this.flashlight.intensity += (target - this.flashlight.intensity) * 0.5;
   }
 }

@@ -321,6 +321,44 @@ export class World {
     return true;
   }
 
+  /**
+   * Distance along the XZ segment to the first wall / solid cell, or null if
+   * nothing blocks it. Same DDA as lineBlocked, but reports where it hit.
+   */
+  raycastWall(ax: number, az: number, bx: number, bz: number): number | null {
+    let gi = Math.floor(ax / CELL);
+    let gj = Math.floor(az / CELL);
+    const ti = Math.floor(bx / CELL);
+    const tj = Math.floor(bz / CELL);
+    if (this.isSolidCell(gi, gj)) return 0;
+    const dx = bx - ax;
+    const dz = bz - az;
+    const len = Math.hypot(dx, dz);
+    const stepI = dx > 0 ? 1 : -1;
+    const stepJ = dz > 0 ? 1 : -1;
+    let tMaxX = dx !== 0 ? (((dx > 0 ? gi + 1 : gi) * CELL) - ax) / dx : Infinity;
+    let tMaxZ = dz !== 0 ? (((dz > 0 ? gj + 1 : gj) * CELL) - az) / dz : Infinity;
+    const tDeltaX = dx !== 0 ? Math.abs(CELL / dx) : Infinity;
+    const tDeltaZ = dz !== 0 ? Math.abs(CELL / dz) : Infinity;
+    for (let guard = 0; guard < 80; guard++) {
+      if (gi === ti && gj === tj) return null;
+      let tCross: number;
+      if (tMaxX < tMaxZ) {
+        tCross = tMaxX;
+        if (this.hasWallV(dx > 0 ? gi + 1 : gi, gj)) return tCross * len;
+        gi += stepI;
+        tMaxX += tDeltaX;
+      } else {
+        tCross = tMaxZ;
+        if (this.hasWallH(gi, dz > 0 ? gj + 1 : gj)) return tCross * len;
+        gj += stepJ;
+        tMaxZ += tDeltaZ;
+      }
+      if (this.isSolidCell(gi, gj)) return tCross * len;
+    }
+    return null;
+  }
+
   /** Random walkable cell centre within ring [minDist, maxDist] of a point. */
   findSpawnSpot(
     x: number, z: number, minDist: number, maxDist: number,

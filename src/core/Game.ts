@@ -347,10 +347,19 @@ export class Game {
     // the torch dies as something gets close (full dark at touch range);
     // befriended companions no longer scare it
     let nearestEnemy = Infinity;
+    let nearestSubject = Infinity;
+    const fwd = new THREE.Vector3();
+    p.camera.getWorldDirection(fwd);
     for (const e of this.spawner.enemies) {
-      if (e.alive && !e.befriended) nearestEnemy = Math.min(nearestEnemy, e.position.distanceTo(p.position));
+      if (!e.alive) continue;
+      const to = e.position.clone().sub(p.position);
+      const d = to.length();
+      if (!e.befriended) nearestEnemy = Math.min(nearestEnemy, d);
+      // anything caught in the beam cone drives the flashlight's auto-iris
+      if (d < 12 && to.normalize().dot(fwd) > 0.8) nearestSubject = Math.min(nearestSubject, d);
     }
     this.lighting.setThreat(1 - (nearestEnemy - 1) / 13);
+    this.lighting.setSubjectDistance(nearestSubject);
 
     this.lighting.update(p.camera, this.time);
     updateWater(this.time);
