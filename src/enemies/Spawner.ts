@@ -44,10 +44,10 @@ export class Spawner {
   update(dt: number, ctx: EnemyContext): void {
     for (const e of this.enemies) e.update(dt, ctx);
 
-    // cull dead/far enemies
+    // cull dead/far enemies (friends are never abandoned)
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
-      const far = e.position.distanceTo(ctx.player.position) > DESPAWN;
+      const far = !e.befriended && e.position.distanceTo(ctx.player.position) > DESPAWN;
       if (e.removeMe || far) {
         this.scene.remove(e.mesh);
         e.dispose();
@@ -60,17 +60,17 @@ export class Spawner {
     const leader = this.enemies.find((e) => e instanceof Hound && e.state === 'chase');
     if (leader) {
       for (const e of this.enemies) {
-        if (e instanceof Hound && (e.state === 'stalk' || e.state === 'wander')
+        if (e instanceof Hound && !e.befriended && (e.state === 'stalk' || e.state === 'wander')
           && e.position.distanceTo(leader.position) < 20) {
           e.state = 'chase';
         }
       }
     }
 
-    // steady trickle of spawns while below the cap
+    // steady trickle of spawns while below the cap (befriended ones don't count)
     this.timer -= dt;
     if (this.timer <= 0) {
-      if (this.enemies.length < MAX_ENEMIES) {
+      if (this.hostileCount() < MAX_ENEMIES) {
         const before = this.enemies.length;
         this.trySpawn(ctx.player.position);
         // no valid hidden spot — retry shortly instead of waiting a full cycle
@@ -81,6 +81,12 @@ export class Spawner {
         this.timer = SPAWN_EVERY_MIN;
       }
     }
+  }
+
+  private hostileCount(): number {
+    let n = 0;
+    for (const e of this.enemies) if (!e.befriended) n++;
+    return n;
   }
 
   private trySpawn(playerPos: THREE.Vector3): void {
@@ -101,7 +107,7 @@ export class Spawner {
     }
     const count = Ctor === Hound ? 2 + (Math.random() < 0.4 ? 1 : 0) : 1;
     for (let i = 0; i < count; i++) {
-      if (this.enemies.length >= MAX_ENEMIES) break;
+      if (this.hostileCount() >= MAX_ENEMIES) break;
       const e = new Ctor();
       const p = spot.clone();
       p.x += (Math.random() - 0.5) * 2;
@@ -118,7 +124,7 @@ export class Spawner {
   dangerLevel(playerPos: THREE.Vector3): number {
     let danger = 0;
     for (const e of this.enemies) {
-      if (!e.alive) continue;
+      if (!e.alive || e.befriended) continue;
       const d = e.position.distanceTo(playerPos);
       const proximity = Math.max(0, 1 - d / 30);
       const weight = e.state === 'chase' || e.state === 'attack' ? 1

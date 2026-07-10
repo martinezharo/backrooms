@@ -49,6 +49,11 @@ export class Smiler extends Enemy {
     return ctx.lighting.isLitArea(this.position, ctx.time) ? 0 : 1;
   }
 
+  befriend(): void {
+    super.befriend();
+    this.litNow = false; // think() no longer runs; don't stay thinned out
+  }
+
   protected buildBody(): void {
     // nested shadow shells, outer ones barely-there
     const profile: [number, number][] = [
@@ -576,6 +581,13 @@ export class Partygoer extends Enemy {
     balloon.scale.set(1, 0.55, 0.85);
     balloon.position.set(0.02, -0.52, 0.05);
     this.armL.end.add(balloon);
+  }
+
+  befriend(): void {
+    super.befriend();
+    // think() no longer runs; settle into a calm amble
+    this.sprinting = false;
+    this.watched = false;
   }
 
   protected think(dt: number, ctx: EnemyContext, distToPlayer: number): void {

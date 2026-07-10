@@ -312,6 +312,59 @@ html, body {
   transition: opacity 0.12s ease-out;
 }
 
+/* ---------- Hug easter egg ---------- */
+#friend-speech {
+  position: absolute;
+  left: 50%; top: 28%;
+  transform: translateX(-50%);
+  max-width: 420px;
+  text-align: center;
+  font-size: 15px;
+  line-height: 1.7;
+  letter-spacing: 0.08em;
+  color: #ffd9ec;
+  background: rgba(46, 10, 30, 0.72);
+  border: 1px solid rgba(255, 138, 194, 0.55);
+  border-radius: 16px;
+  padding: 12px 22px;
+  text-shadow: 0 0 10px rgba(255, 120, 180, 0.8);
+  box-shadow: 0 0 26px rgba(255, 120, 180, 0.28);
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+#friend-speech.visible { opacity: 1; }
+#friend-speech .friend-name {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.35em;
+  color: #ff9ccb;
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
+
+#heart-burst {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.burst-heart {
+  position: absolute;
+  bottom: -48px;
+  opacity: 0;
+  animation-name: heartRise;
+  animation-timing-function: ease-out;
+  animation-fill-mode: forwards;
+  filter: drop-shadow(0 0 6px rgba(255, 120, 180, 0.6));
+}
+@keyframes heartRise {
+  0% { transform: translateY(0) scale(0.5) rotate(-10deg); opacity: 0; }
+  12% { opacity: 1; }
+  50% { transform: translateY(-55vh) scale(1) rotate(8deg); opacity: 1; }
+  100% { transform: translateY(-115vh) scale(1.2) rotate(-6deg); opacity: 0; }
+}
+
 /* ---------- Inventory ---------- */
 #inventory-screen {
   background: rgba(2, 2, 0, 0.78);

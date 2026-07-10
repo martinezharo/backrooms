@@ -253,6 +253,8 @@ export class Game {
       this.lighting.setFlashlight(!this.lighting.flashlightOn);
       this.audio.playSfx('click', 0.5);
     }
+    // secret: hug the monster standing next to you
+    if (this.input.pressed('KeyH') && !uiOpen) this.tryHug();
     if (!uiOpen) this.updateQuickSelect();
 
     // ---- world streaming ----
@@ -342,10 +344,11 @@ export class Game {
     this.hud.announceBiome(biome.name);
     this.audio.setAmbience(biome.ambienceId);
 
-    // the torch dies as something gets close (full dark at touch range)
+    // the torch dies as something gets close (full dark at touch range);
+    // befriended companions no longer scare it
     let nearestEnemy = Infinity;
     for (const e of this.spawner.enemies) {
-      if (e.alive) nearestEnemy = Math.min(nearestEnemy, e.position.distanceTo(p.position));
+      if (e.alive && !e.befriended) nearestEnemy = Math.min(nearestEnemy, e.position.distanceTo(p.position));
     }
     this.lighting.setThreat(1 - (nearestEnemy - 1) / 13);
 
@@ -385,6 +388,26 @@ export class Game {
       equipped: this.inventory.equipped === p.item,
     })));
 
+  }
+
+  /** Easter egg: press H right next to a monster to hug it. It melts,
+   *  becomes your friend for the rest of the run and follows you around. */
+  private tryHug(): void {
+    let best: Enemy | null = null;
+    let bestDist = 2.6;
+    for (const e of this.spawner.enemies) {
+      if (!e.alive || e.befriended) continue;
+      const d = e.position.distanceTo(this.player.position);
+      if (d < bestDist) {
+        bestDist = d;
+        best = e;
+      }
+    }
+    if (!best) return;
+    best.befriend();
+    this.audio.playSfx('pickup', 0.7);
+    this.hud.showFriendSpeech(best.typeName, 'Thanks for the hug. I just needed a little love. 🥺');
+    this.hud.burstHearts();
   }
 
   /** Number keys equip directly (same key again = put away);
