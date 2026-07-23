@@ -10,6 +10,7 @@ import { Lighting } from '../rendering/Lighting';
 export interface EnemyContext {
   world: World;
   player: Player;
+  enemies?: readonly Enemy[];
   lighting: Lighting;
   time: number;
   isBlocking: () => boolean;
@@ -44,6 +45,7 @@ function heartTexture(): THREE.CanvasTexture {
 }
 
 const HEART_COLORS = [0xff5ca8, 0xff8ac2, 0xffb3d9, 0xff77b5, 0xffd0e6];
+const FRIEND_DEFEND_RADIUS = 18;
 
 interface PathNode { gi: number; gj: number; g: number; f: number; parent: PathNode | null; }
 
@@ -163,6 +165,7 @@ export abstract class Enemy {
     this.befriended = true;
     this.state = 'wander';
     this.stunTimer = 0;
+    this.attackTimer = 0;
     this.boldness = 0;
     this.frozen = false;
     this.path = [];
@@ -277,24 +280,45 @@ export abstract class Enemy {
     }
   }
 
-  /** Befriended companion: tag along at heel distance, hearts in tow.
-   *  No stalking, no attacks — just love. */
+  /** Befriended companion: stay close and intercept monsters actively hunting
+   *  the player. Friends never attack neutral stalkers or each other. */
   private updateFriend(dt: number, ctx: EnemyContext, distToPlayer: number): void {
     this.speedMult = 1;
+    const threat = this.nearestThreat(ctx);
+    const distToThreat = threat ? this.position.distanceTo(threat.position) : Infinity;
     const moveDir = new THREE.Vector3();
-    if (distToPlayer > 3.2) {
+
+    if (threat && distToThreat > this.attackRange + threat.radius * 0.5) {
+      // intercept an attacker, moving slightly faster than ordinary following
+      this.followPath(dt, ctx.world, threat.position, moveDir, 1.15);
+    } else if (!threat && distToPlayer > 3.2) {
       // sprint to catch up when left far behind, walk when close
       this.followPath(dt, ctx.world, ctx.player.position, moveDir, distToPlayer > 12 ? 1.6 : 1);
     }
+
     // even the slow ones keep pace — friendship finds a way
-    const followSpeed = Math.max(this.speed, 3.4);
+    const followSpeed = Math.max(this.speed, threat ? 4 : 3.4);
     const moved = this.applyMovement(dt, ctx, moveDir.multiplyScalar(followSpeed));
     this.walkPhase += moved * 2.2;
     this.animate(dt, moved / Math.max(dt, 1e-4), ctx);
 
-    const faceTarget = moveDir.lengthSq() > 1e-4
+    if (threat) {
+      this.attackTimer -= dt;
+      const strikeRange = this.attackRange + threat.radius;
+      const verticalGap = Math.abs(threat.position.y - this.position.y);
+      if (distToThreat <= strikeRange && verticalGap < 1.4 && this.attackTimer <= 0) {
+        this.attackTimer = this.attackCooldown;
+        const knockDir = threat.position.clone().sub(this.position);
+        threat.takeDamage(this.damage, knockDir);
+        this.twitch = 1;
+      }
+    } else {
+      this.attackTimer = Math.min(this.attackTimer, 0.35);
+    }
+
+    const faceTarget = threat?.position ?? (moveDir.lengthSq() > 1e-4
       ? this.position.clone().add(moveDir)
-      : ctx.player.position;
+      : ctx.player.position);
     this.faceToward(faceTarget, dt);
     this.updateHead(dt, ctx, distToPlayer);
 
@@ -309,6 +333,22 @@ export abstract class Enemy {
         Math.sin(a) * 0.55,
       );
     }
+  }
+
+  private nearestThreat(ctx: EnemyContext): Enemy | null {
+    let nearest: Enemy | null = null;
+    let nearestDist = Infinity;
+    for (const enemy of ctx.enemies ?? []) {
+      if (enemy === this || !enemy.alive || enemy.befriended) continue;
+      if (enemy.state !== 'chase' && enemy.state !== 'attack') continue;
+      if (enemy.position.distanceTo(ctx.player.position) > FRIEND_DEFEND_RADIUS) continue;
+      const d = enemy.position.distanceTo(this.position);
+      if (d < nearestDist) {
+        nearest = enemy;
+        nearestDist = d;
+      }
+    }
+    return nearest;
   }
 
   private faceToward(target: THREE.Vector3, dt: number): void {
