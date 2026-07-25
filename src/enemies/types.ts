@@ -147,7 +147,7 @@ export class Smiler extends Enemy {
     }
 
     // the grin widens when you look at it
-    const watched = (this.state === 'stalk' && this.frozen) || this.state === 'chase';
+    const watched = (this.state === 'stalk' && this.frozen) || this.state === 'chase' || this.attackPulse > 0;
     this.grinOpen += ((watched ? 1 : 0) - this.grinOpen) * Math.min(1, dt * 1.8);
     this.lowerJaw.rotation.x = this.grinOpen * 0.5;
     this.lowerJaw.position.y = -this.grinOpen * 0.04;
@@ -284,7 +284,8 @@ export class SkinStealer extends Enemy {
     this.legR.joints[0].rotation.x = -Math.sin(ph + 0.5) * 0.28 * s;
     this.legR.joints[1].rotation.x = -0.15 + Math.max(0, Math.sin(ph + 0.5)) * 0.25 * s;
     // arms hang dead, raise toward you in a chase
-    const reach = this.state === 'chase' ? 1 : 0;
+    const attacking = this.state === 'chase' || this.attackPulse > 0;
+    const reach = attacking ? 1 : 0;
     for (const [l, dir] of [[this.armL, 1], [this.armR, -1]] as const) {
       const target = -1.3 * reach + Math.sin(ph + dir) * 0.12 * s;
       l.joints[0].rotation.x += (target - l.joints[0].rotation.x) * Math.min(1, dt * 6);
@@ -293,7 +294,8 @@ export class SkinStealer extends Enemy {
     // slow neck roll — deeply wrong — and spine spasms
     this.headPivot!.rotation.z = Math.sin(ctx.time * 0.4) * 0.3 + this.twitch * 0.35;
     // jaw hangs open with boldness, snaps when it has you
-    const close = this.state === 'chase' && this.position.distanceTo(ctx.player.position) < 3;
+    const close = (this.state === 'chase' && this.position.distanceTo(ctx.player.position) < 3)
+      || this.attackPulse > 0;
     this.jaw.rotation.x = 0.12 + this.boldness * 0.4 + (close ? Math.max(0, Math.sin(ctx.time * 11)) * 0.35 : 0);
   }
 }
@@ -415,10 +417,11 @@ export class Hound extends Enemy {
     this.neck.rotation.y += ((wandering ? Math.sin(ctx.time * 0.8) * 0.5 : 0) - this.neck.rotation.y) * Math.min(1, dt * 2);
     this.neck.rotation.x += ((wandering ? 0.35 : 0) - this.neck.rotation.x) * Math.min(1, dt * 2);
     // hackles rise once it has picked you
-    const hackles = this.state === 'stalk' || this.state === 'chase' ? 1.15 : 1;
+    const hackles = this.state === 'stalk' || this.state === 'chase' || this.attackPulse > 0 ? 1.15 : 1;
     this.ridge.scale.y += (hackles - this.ridge.scale.y) * Math.min(1, dt * 3);
     // jaw snaps when close
-    const close = this.state === 'chase' && this.position.distanceTo(ctx.player.position) < 3;
+    const close = (this.state === 'chase' && this.position.distanceTo(ctx.player.position) < 3)
+      || this.attackPulse > 0;
     this.jaw.rotation.x = (close ? 0.25 + Math.sin(ctx.time * 14) * 0.2 : 0.06) + this.twitch * 0.2;
   }
 }
@@ -607,7 +610,7 @@ export class Partygoer extends Enemy {
   protected animate(dt: number, moveSpeed: number, _ctx: EnemyContext): void {
     const s = Math.min(1, moveSpeed / (this.speed * 2.5));
     const ph = this.walkPhase * 1.3;
-    const flail = this.sprinting ? 3 : 1;
+    const flail = this.sprinting || this.attackPulse > 0 ? 3 : 1;
     this.legL.joints[0].rotation.x = Math.sin(ph) * 0.6 * s;
     this.legR.joints[0].rotation.x = -Math.sin(ph) * 0.6 * s;
     this.legL.joints[1].rotation.x = Math.max(0, -Math.sin(ph)) * 0.5 * s;
@@ -618,7 +621,7 @@ export class Partygoer extends Enemy {
     this.armL.joints[1].rotation.x = 0.12 + (flail > 1 ? Math.sin(ph * 2) * 0.3 * s : 0);
     this.armR.joints[1].rotation.x = 0.12 + (flail > 1 ? -Math.sin(ph * 2) * 0.3 * s : 0);
     // forward lean during a sprint
-    const leanTarget = this.sprinting && s > 0.3 ? 0.15 : 0;
+    const leanTarget = (this.sprinting || this.attackPulse > 0) && s > 0.3 ? 0.15 : 0;
     this.lean += (leanTarget - this.lean) * Math.min(1, dt * 4);
     this.mesh.rotation.x = this.lean;
     // while you watch it, the head slowly rolls to the side — much too far

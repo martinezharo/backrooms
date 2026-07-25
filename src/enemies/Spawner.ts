@@ -42,6 +42,7 @@ export class Spawner {
   }
 
   update(dt: number, ctx: EnemyContext): void {
+    ctx.enemies = this.enemies;
     for (const e of this.enemies) e.update(dt, ctx);
 
     // cull dead/far enemies (friends are never abandoned)
