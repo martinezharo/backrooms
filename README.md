@@ -30,6 +30,29 @@ anywhere (it's just static files). `pnpm check` runs the type-check alone.
 
 The world seed is in the URL (`?seed=1234`) — share it to share your maze.
 
+## The way out
+
+A run is an extraction, not a walk. Three **fuses** are hidden in chunks
+scattered ~200–290 m from spawn, one per direction, each on a plinth in a
+cleared room you can find by its light. The **field receiver** in your starting
+kit points at the nearest one and ticks faster the closer you get — a bearing,
+not a map.
+
+Somewhere else entirely there's the **exit portal**: a hole punched through a
+wall or the floor (50/50), looking straight down onto the real world. Down here
+and down out there were never the same direction. Dormant until you feed it
+fuses — press `R` to swing the receiver onto it.
+
+- **3 fuses** — the door holds. Full escape.
+- **1 or 2** — it opens anyway, badly. You can leave early if your nerve goes.
+
+Step through and you fall: cloud deck, then open air, then a landscape of
+fields, roads and a town coming up at you far too fast. Every fuse you pull
+also raises the **pressure** — more entities, spawning sooner. The trip back to
+the door is the loudest part of the run.
+
+Records (escapes, descents, best time, deepest) persist in `localStorage`.
+
 ## The world
 
 Infinite, chunk-streamed, deterministic from the seed. Four levels blend into
@@ -80,7 +103,10 @@ the danger.
 Weapons spawn on the floor and on tables (glowing ring): pipe wrench, metal
 pipe, kitchen knife, glass bottle (throwable), fire extinguisher (stun cloud),
 pistol (if you find ammo), torch. Each has damage, speed, durability and
-weight. Grid inventory (Tarkov-style), 10 weight units max, one item in hand.
+weight. The torch burns through a **battery** in about five minutes; picking one
+up with a flat torch fits it straight away, and `F` fits a spare when the beam
+dies on you. **Almond water machines** in Levels 0 and 2 refill your thirst
+instantly, three servings each. Grid inventory (Tarkov-style), 10 weight units max, one item in hand.
 
 A **hotbar** keeps everything reachable without opening the bag: number keys
 equip directly, the mouse wheel cycles items, G drops what you're holding.
@@ -102,7 +128,8 @@ item out of the panel to drop it.
 | Mouse wheel | Cycle items → empty hands |
 | G | Drop held item |
 | TAB / I | Inventory |
-| F | Torch |
+| F | Torch (swaps in a battery when it's dead) |
+| R | Point the receiver at the fuses / at the exit |
 | Esc | Pause |
 
 ## Project structure
@@ -128,7 +155,12 @@ on port 5199 first, e.g. `pnpm dev --port 5199`):
 node scripts/smoke.mjs    # boots the game, walks, opens UI, reports errors
 node scripts/tour.mjs     # screenshots all four levels to /tmp
 node scripts/inspect.mjs  # probes world internals (taps, lights, water, enemies)
+node scripts/escape.mjs   # runs a whole extraction: portal, fuses, the fall
 ```
+
+`scripts/escape.mjs` takes an optional seed and shoots the portal (dormant and
+open) plus five moments of the fall — the fastest way to check the sequence
+after touching `rendering/Escape.ts` or `rendering/AerialView.ts`.
 
 ---
 

@@ -65,6 +65,24 @@
           </span>
           <div class="bar-track"><div id="thirst-fill" class="bar-fill thirst"></div></div>
         </div>
+        <div class="bar-row hidden" id="torch-row">
+          <span class="bar-icon torch" aria-label="torch battery">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M8.5 2.5h7l-1.2 6h-4.6l-1.2-6z"/><path d="M9.8 9.5h4.4V20a1.4 1.4 0 0 1-1.4 1.4h-1.6A1.4 1.4 0 0 1 9.8 20V9.5z"/></svg>
+          </span>
+          <div class="bar-track thin"><div id="torch-fill" class="bar-fill torch"></div></div>
+        </div>
+      </div>
+
+      <!-- Objective tracker -->
+      <div id="objective" class="hidden">
+        <div id="objective-title">FIND THE FUSES</div>
+        <div id="objective-pips"></div>
+        <div id="objective-track">
+          <span id="objective-arrow">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M12 2 20.5 21 12 16.6 3.5 21z"/></svg>
+          </span>
+          <span id="objective-dist"></span>
+        </div>
       </div>
       <div id="interact-prompt" class="hidden"></div>
       <div id="equipped-label"></div>
@@ -99,7 +117,9 @@
           <span class="badge">no sign-up</span>
           <span class="badge">plays in your browser</span>
         </div>
+        <p class="objective-pitch">find three fuses · power the door · fall back into the world</p>
         <button id="btn-start" class="menu-btn big">DESCEND — PLAY FREE</button>
+        <p id="landing-records" class="warn hidden"></p>
         <p class="warn">
           <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M12 3a8 8 0 0 0-8 8v6a2.2 2.2 0 0 0 2.2 2.2H8V13H6.2v-2a5.8 5.8 0 0 1 11.6 0v2H16v6.2h1.8A2.2 2.2 0 0 0 20 17v-6a8 8 0 0 0-8-8z"/></svg>
           headphones strongly recommended
@@ -130,6 +150,10 @@
             <p>Find weapons, a flashlight and ammunition. Manage your thirst, drink from rusty taps, and decide when to fight and when to run.</p>
           </section>
           <section class="feature">
+            <h3>There is a way out</h3>
+            <p>Three fuses are buried in the levels. Bring them to the exit portal, step through, and fall out of the Backrooms into the sky above the real world. Leave early with fewer fuses if your nerve goes.</p>
+          </section>
+          <section class="feature">
             <h3>Sound is everything</h3>
             <p>Every noise is synthesized live: the fluorescent hum, your heartbeat, and the whispers that mean something is close. Positional 3D audio — trust your ears.</p>
           </section>
@@ -138,7 +162,7 @@
         <section class="landing-controls controls-help">
           <h3>Controls</h3>
           <p>WASD move · Mouse look · Space jump · C/Ctrl crouch · Shift run</p>
-          <p>E interact · LMB attack · RMB block/aim · TAB inventory · G drop held item · F torch</p>
+          <p>E interact · LMB attack · RMB block/aim · TAB inventory · G drop held item · F torch · R switch receiver</p>
           <p>1–9/0 quick equip · mouse wheel cycle items</p>
         </section>
       </main>
@@ -161,6 +185,16 @@
       <p id="gameover-cause" class="tagline"></p>
       <p id="gameover-stats" class="tagline"></p>
       <button id="btn-respawn" class="menu-btn">WAKE UP AGAIN</button>
+    </div>
+
+    <!-- Escaped -->
+    <div id="escape-screen" class="overlay menu-screen hidden">
+      <h1 class="game-title out">YOU ARE OUT</h1>
+      <p id="escape-cause" class="tagline"></p>
+      <p id="escape-stats" class="tagline"></p>
+      <div id="escape-records"></div>
+      <button id="btn-again" class="menu-btn">DESCEND AGAIN</button>
+      <button id="btn-same-seed" class="menu-btn ghost">SAME SEED</button>
     </div>
   </div>
 

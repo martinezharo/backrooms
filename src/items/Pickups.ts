@@ -110,6 +110,11 @@ export class Pickups {
     return best;
   }
 
+  /** Has this world spawn already been picked up this run? */
+  isConsumed(spawnId: string): boolean {
+    return this.consumed.has(spawnId);
+  }
+
   take(p: Pickup): ItemInstance {
     if (p.spawnId) this.consumed.add(p.spawnId);
     this.removeMesh(p);

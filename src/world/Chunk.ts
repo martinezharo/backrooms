@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { CELLS, CELL, CHUNK } from '../core/constants';
 import { chunkRng, hash3, mulberry32, randInt, Rng } from '../core/rng';
 import { BiomeId, BIOMES, biomeForChunk } from './Biomes';
+import { fuseSiteAt, isExitChunk, objectiveLayout } from './Objective';
 
 export interface LightFixture {
   x: number; y: number; z: number; // world position of the panel
@@ -22,6 +23,22 @@ export interface LightFixture {
 export interface TapSpot { x: number; y: number; z: number; angle: number; }
 export interface TableSpot { x: number; z: number; }
 export interface ItemSpawn { id: string; itemId: string; x: number; y: number; z: number; }
+/** Plinth holding one of the three fuses. */
+export interface PedestalSpot { x: number; y: number; z: number; }
+/** Almond water machine — crouch-free instant drink, a few servings only. */
+export interface VendingSpot { x: number; y: number; z: number; angle: number; id: string; }
+/**
+ * The way out. `onWall` portals hang on a wall face and still look straight
+ * down onto the real world — down here and down out there are not the same
+ * direction, and the portal does not care.
+ */
+export interface PortalSpot {
+  x: number; y: number; z: number;
+  onWall: boolean;
+  /** facing direction of a wall portal (radians about Y) */
+  angle: number;
+  radius: number;
+}
 
 export interface ChunkData {
   cx: number;
@@ -38,6 +55,9 @@ export interface ChunkData {
   taps: TapSpot[];
   tables: TableSpot[];
   itemSpawns: ItemSpawn[];
+  pedestal: PedestalSpot | null;
+  portal: PortalSpot | null;
+  vending: VendingSpot[];
   group: THREE.Group | null;          // built scene subtree (set by ChunkBuilder)
   flickerPanels: { mesh: THREE.Mesh; light: LightFixture }[];
 }
@@ -154,14 +174,15 @@ function fixConnectivity(c: ChunkData, seedCells: number[]) {
 }
 
 const ITEM_TABLE: { id: string; w: number }[] = [
-  { id: 'knife', w: 0.16 },
-  { id: 'pipe', w: 0.16 },
-  { id: 'bottle', w: 0.18 },
-  { id: 'wrench', w: 0.12 },
-  { id: 'extinguisher', w: 0.08 },
-  { id: 'flashlight', w: 0.1 },
+  { id: 'knife', w: 0.14 },
+  { id: 'pipe', w: 0.14 },
+  { id: 'bottle', w: 0.14 },
+  { id: 'wrench', w: 0.1 },
+  { id: 'extinguisher', w: 0.07 },
+  { id: 'flashlight', w: 0.08 },
   { id: 'pistol', w: 0.04 },
-  { id: 'ammo', w: 0.16 },
+  { id: 'ammo', w: 0.14 },
+  { id: 'battery', w: 0.15 },
 ];
 
 function rollItem(rng: Rng): string {
@@ -191,6 +212,9 @@ export function generateChunk(seed: number, cx: number, cz: number): ChunkData {
     taps: [],
     tables: [],
     itemSpawns: [],
+    pedestal: null,
+    portal: null,
+    vending: [],
     group: null,
     flickerPanels: [],
   };
@@ -288,6 +312,42 @@ export function generateChunk(seed: number, cx: number, cz: number): ChunkData {
     }
   }
 
+  // ---- objective room (carved before connectivity so it never seals itself) ----
+  const fuseSite = fuseSiteAt(seed, cx, cz);
+  const exitHere = isExitChunk(seed, cx, cz);
+  let siteCell: { i: number; j: number } | null = null;
+  if (fuseSite || exitHere) {
+    const si = randInt(rng, 5, 11);
+    const sj = randInt(rng, 5, 11);
+    siteCell = { i: si, j: sj };
+    // a clear 5x5 apron of walkable floor, dry and flat
+    for (let dj = -2; dj <= 2; dj++) {
+      for (let di = -2; di <= 2; di++) {
+        const k = idx(si + di, sj + dj);
+        c.solid[k] = 0;
+        c.floor[k] = 0;
+        c.water[k] = 0;
+      }
+    }
+    // knock every wall out of the apron — these rooms read as a clearing
+    for (let dj = -2; dj <= 2; dj++) {
+      for (let di = -2; di <= 2; di++) {
+        const i = si + di;
+        const j = sj + dj;
+        c.wallsV[i * N + j] = 0;
+        c.wallsV[(i + 1) * N + j] = 0;
+        c.wallsH[j * N + i] = 0;
+        c.wallsH[(j + 1) * N + i] = 0;
+      }
+    }
+    if (exitHere && objectiveLayout(seed).exit.onWall) {
+      // the portal needs something to hang on: a free-standing partition two
+      // cells west of the centre. Open at both ends, so the connectivity pass
+      // never needs to carve through it.
+      for (let dj = -1; dj <= 1; dj++) c.wallsV[(si - 1) * N + sj + dj] = 1;
+    }
+  }
+
   // ---- connectivity ----
   const seeds: number[] = [];
   for (const j of doorCellsOfLine(lineW)) seeds.push(idx(0, j));
@@ -360,6 +420,48 @@ export function generateChunk(seed: number, cx: number, cz: number): ChunkData {
     }
   }
 
+  // ---- almond water machines (Levels 0 and 2, rare) ----
+  if ((biome === BiomeId.Level0 || biome === BiomeId.Level2) && rng() < 0.15) {
+    for (let tries = 0; tries < 24; tries++) {
+      const i = randInt(rng, 1, N - 1);
+      const j = randInt(rng, 1, N - 1);
+      const k = idx(i, j);
+      if (c.solid[k] || c.water[k]) continue;
+      const [vx, vz] = cellCenter(i, j);
+      const id = `${cx},${cz},vend`;
+      // angle is the yaw applied to the model; its front face is local +z
+      if (c.wallsV[i * N + j]) {
+        c.vending.push({ x: wx0 + i * CELL + 0.35, y: c.floor[k], z: vz, angle: Math.PI / 2, id });
+      } else if (c.wallsV[(i + 1) * N + j]) {
+        c.vending.push({ x: wx0 + (i + 1) * CELL - 0.35, y: c.floor[k], z: vz, angle: -Math.PI / 2, id });
+      } else if (c.wallsH[j * N + i]) {
+        c.vending.push({ x: vx, y: c.floor[k], z: wz0 + j * CELL + 0.35, angle: 0, id });
+      } else if (c.wallsH[(j + 1) * N + i]) {
+        c.vending.push({ x: vx, y: c.floor[k], z: wz0 + (j + 1) * CELL - 0.35, angle: Math.PI, id });
+      } else {
+        continue;
+      }
+      break;
+    }
+  }
+
+  // ---- objective props ----
+  if (siteCell) {
+    const { i: si, j: sj } = siteCell;
+    const [sxw, szw] = cellCenter(si, sj);
+    // a landmark you can find by light alone
+    c.lights.push({ x: sxw, y: c.ceil - 0.1, z: szw, broken: false, flicker: false, phase: 0, speed: 8 });
+    if (fuseSite) {
+      c.pedestal = { x: sxw, y: 0, z: szw };
+    } else {
+      const onWall = objectiveLayout(seed).exit.onWall;
+      const radius = Math.min(1.05, (c.ceil - 0.55) / 2);
+      c.portal = onWall
+        ? { x: wx0 + (si - 1) * CELL + 0.14, y: radius + 0.34, z: szw, onWall: true, angle: 0, radius }
+        : { x: sxw, y: 0.03, z: szw, onWall: false, angle: 0, radius: 1.15 };
+    }
+  }
+
   // ---- tables (Level 0, rare) ----
   if (biome === BiomeId.Level0 && rng() < 0.22) {
     for (let tries = 0; tries < 12; tries++) {
@@ -391,10 +493,22 @@ export function generateChunk(seed: number, cx: number, cz: number): ChunkData {
     }
   };
 
+  if (c.pedestal) {
+    // the fuse sits on its plinth, with a little loot to make the trip pay
+    c.itemSpawns.push({
+      id: `fuse:${cx},${cz}`, itemId: 'fuse',
+      x: c.pedestal.x, y: c.pedestal.y + 1.04, z: c.pedestal.z,
+    });
+    spawnItem(rollItem(rng));
+    if (rng() < 0.5) spawnItem('battery');
+  }
+
   if (cx === 0 && cz === 0) {
     // Guaranteed early-game kit near spawn.
     spawnItem('flashlight', { i: 8, j: 8 });
     spawnItem('knife', { i: 8, j: 8 });
+    spawnItem('detector', { i: 8, j: 8 });
+    spawnItem('battery', { i: 8, j: 8 });
   } else {
     if (rng() < 0.38) spawnItem(rollItem(rng));
     if (rng() < 0.1) spawnItem(rollItem(rng));

@@ -94,6 +94,42 @@ export function buildItemMesh(id: string): THREE.Group {
       g.add(lens);
       break;
     }
+    case 'fuse': {
+      const body = cyl(0.035, 0.035, 0.13, mat('ceramic', () => new THREE.MeshStandardMaterial({
+        color: 0xd9cba6, roughness: 0.65,
+      })));
+      body.rotation.z = Math.PI / 2;
+      g.add(body);
+      for (const x of [-0.075, 0.075]) {
+        const cap = cyl(0.038, 0.038, 0.03, brass(), x, 0, 0);
+        cap.rotation.z = Math.PI / 2;
+        g.add(cap);
+      }
+      g.add(box(0.05, 0.012, 0.012, mat('fuseWire', () => new THREE.MeshStandardMaterial({
+        color: 0xffb347, emissive: 0xff8c1a, emissiveIntensity: 0.9,
+      })), 0, 0.028, 0));
+      break;
+    }
+    case 'battery': {
+      g.add(cyl(0.021, 0.021, 0.11, mat('cell', () => new THREE.MeshStandardMaterial({
+        color: 0x2f4f2a, roughness: 0.5, metalness: 0.4,
+      }))));
+      g.add(cyl(0.012, 0.012, 0.012, brass(), 0, 0.06, 0));
+      break;
+    }
+    case 'detector': {
+      g.add(box(0.13, 0.09, 0.05, mat('caseGrey', () => new THREE.MeshStandardMaterial({
+        color: 0x5a5f52, roughness: 0.75,
+      }))));
+      g.add(box(0.075, 0.045, 0.008, mat('screen', () => new THREE.MeshStandardMaterial({
+        color: 0x1b3a2a, emissive: 0x35d17a, emissiveIntensity: 0.7,
+      })), 0, 0.012, 0.027));
+      const ant = cyl(0.005, 0.005, 0.19, steel(), 0.05, 0.14, 0);
+      ant.rotation.z = 0.15;
+      g.add(ant);
+      g.add(cyl(0.012, 0.012, 0.012, blackPlastic(), -0.04, -0.03, 0.027));
+      break;
+    }
     case 'ammo': {
       g.add(box(0.1, 0.06, 0.07, mat('ammoBox', () => new THREE.MeshStandardMaterial({ color: 0x4c5a37, roughness: 0.8 }))));
       g.add(box(0.1, 0.012, 0.07, brass(), 0, 0.037, 0));

@@ -2,6 +2,16 @@
 
 import { itemIcon } from './icons';
 
+export interface ObjectiveView {
+  title: string;
+  fuses: number;
+  total: number;
+  /** angle to the target relative to where you're looking, or null with no receiver */
+  bearing: number | null;
+  distance: number | null;
+  ready: boolean;
+}
+
 export class HUD {
   private root = document.getElementById('hud')!;
   private healthFill = document.getElementById('health-fill')!;
@@ -14,8 +24,16 @@ export class HUD {
   private hotbar = document.getElementById('hotbar')!;
   private friendSpeech = document.getElementById('friend-speech')!;
   private heartBurst = document.getElementById('heart-burst')!;
+  private objective = document.getElementById('objective')!;
+  private objTitle = document.getElementById('objective-title')!;
+  private objPips = document.getElementById('objective-pips')!;
+  private objArrow = document.getElementById('objective-arrow')!;
+  private objDist = document.getElementById('objective-dist')!;
+  private torchRow = document.getElementById('torch-row')!;
+  private torchFill = document.getElementById('torch-fill')!;
   private friendSpeechTimer: number | null = null;
   private hotbarSig = '';
+  private pipCount = -1;
 
   private biomeShown = '';
   private biomeTimer: number | null = null;
@@ -32,6 +50,46 @@ export class HUD {
     (this.thirstFill as HTMLElement).style.width = `${Math.max(0, thirst)}%`;
     this.healthFill.classList.toggle('critical', health < 25);
     this.thirstFill.classList.toggle('critical', thirst < 20);
+  }
+
+  /** The run objective: fuse pips, plus a bearing arrow while you carry the receiver. */
+  setObjective(o: ObjectiveView | null): void {
+    if (!o) {
+      this.objective.classList.add('hidden');
+      return;
+    }
+    this.objective.classList.remove('hidden');
+    this.objective.classList.toggle('ready', o.ready);
+    this.objective.classList.toggle('no-signal', o.bearing === null);
+    if (this.objTitle.textContent !== o.title) this.objTitle.textContent = o.title;
+
+    if (this.pipCount !== o.total) {
+      this.pipCount = o.total;
+      this.objPips.innerHTML = '';
+      for (let i = 0; i < o.total; i++) {
+        const pip = document.createElement('span');
+        pip.className = 'obj-pip';
+        this.objPips.appendChild(pip);
+      }
+    }
+    for (let i = 0; i < this.objPips.children.length; i++) {
+      this.objPips.children[i].classList.toggle('filled', i < o.fuses);
+    }
+
+    if (o.bearing !== null) {
+      (this.objArrow as HTMLElement).style.transform = `rotate(${(o.bearing * 180) / Math.PI}deg)`;
+    }
+    this.objDist.textContent = o.bearing === null
+      ? 'NO RECEIVER'
+      : o.distance === null ? 'SIGNAL LOST' : `${Math.round(o.distance / 10) * 10} M`;
+  }
+
+  /** Torch charge bar; hidden entirely when you have no torch. */
+  setTorch(charge: number | null): void {
+    this.torchRow.classList.toggle('hidden', charge === null);
+    if (charge === null) return;
+    (this.torchFill as HTMLElement).style.width = `${Math.max(0, charge)}%`;
+    this.torchFill.classList.toggle('critical', charge < 20);
   }
 
   setPrompt(text: string | null): void {

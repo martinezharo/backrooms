@@ -38,6 +38,7 @@ export class AudioEngine {
   private currentAmbience: AmbienceId | null = null;
   private dripTimer = 0;
   private sprayNode: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private windNode: { src: AudioBufferSourceNode; gain: GainNode; filter: BiquadFilterNode } | null = null;
 
   constructor() {
     this.ctx = this.listener.context;
@@ -188,6 +189,53 @@ export class AudioEngine {
       for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.4;
       lowpass(d, 0.55);
     }));
+    B.set('ping', makeBuffer(ctx, 0.14, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        d[i] = Math.sin(2 * Math.PI * 1750 * t) * envExp(i, sr, 42) * 0.28;
+      }
+    }));
+    B.set('fuseIn', makeBuffer(ctx, 0.7, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const clunk = (Math.random() - 0.5) * envExp(i, sr, 60) * 0.9;
+        const hum = Math.sin(2 * Math.PI * (90 + t * 120) * t) * envExp(i, sr, 4) * 0.4;
+        d[i] = clunk + hum;
+      }
+      lowpass(d, 0.4);
+    }));
+    B.set('portalOpen', makeBuffer(ctx, 3.4, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const rise = Math.pow(t / 3.4, 0.7);
+        let v = 0;
+        for (const f of [110, 165, 220, 330]) {
+          v += Math.sin(2 * Math.PI * f * (1 + rise * 3) * t);
+        }
+        const air = (Math.random() * 2 - 1) * rise * 0.5;
+        d[i] = (v * 0.14 + air) * Math.min(1, t * 3) * (1 - Math.pow(t / 3.4, 4));
+      }
+    }));
+    B.set('whoosh', makeBuffer(ctx, 2.2, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const env = Math.sin(Math.PI * Math.min(1, t / 2.2)) ** 1.5;
+        d[i] = (Math.random() * 2 - 1) * env * 0.85;
+      }
+      lowpass(d, 0.08);
+    }));
+    B.set('windLoop', makeBuffer(ctx, 4, (d) => {
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      lowpass(d, 0.35);
+      // taper the seam so the loop doesn't tick
+      const n = d.length;
+      for (let i = 0; i < 2000; i++) {
+        const k = i / 2000;
+        d[i] *= k;
+        d[n - 1 - i] *= k;
+      }
+    }));
+
     // ---- enemy cues (one-shots, played at AI moments) ----
     B.set('whisper', makeBuffer(ctx, 1.2, (d, sr) => {
       for (let i = 0; i < d.length; i++) {
@@ -292,6 +340,49 @@ export class AudioEngine {
     const node = this.sprayNode;
     setTimeout(() => node.src.stop(), 300);
     this.sprayNode = null;
+  }
+
+  // -------------------------------------------------------- the fall
+
+  /** Freefall wind: filtered noise whose brightness tracks how fast you're going. */
+  startWind(): void {
+    if (this.windNode || this.ctx.state !== 'running') return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.buffers.get('windLoop')!;
+    src.loop = true;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 300;
+    filter.Q.value = 0.5;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0;
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.master);
+    src.start();
+    this.windNode = { src, gain, filter };
+  }
+
+  setWindLevel(level: number): void {
+    if (!this.windNode) return;
+    const t = this.ctx.currentTime;
+    this.windNode.gain.gain.setTargetAtTime(level * 0.55, t, 0.15);
+    this.windNode.filter.frequency.setTargetAtTime(280 + level * 1500, t, 0.2);
+  }
+
+  stopWind(): void {
+    if (!this.windNode) return;
+    const node = this.windNode;
+    node.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.3);
+    setTimeout(() => node.src.stop(), 1200);
+    this.windNode = null;
+  }
+
+  /** Pull the maze's own noise down — used while falling out of it. */
+  duckWorld(amount: number): void {
+    const t = this.ctx.currentTime;
+    this.ambBus.gain.setTargetAtTime(0.8 * (1 - amount), t, 0.4);
+    this.sfxBus.gain.setTargetAtTime(1 - amount, t, 0.4);
   }
 
   // ------------------------------------------------------------- cues

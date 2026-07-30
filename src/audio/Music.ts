@@ -74,6 +74,14 @@ export class Music {
     this.heartGain.connect(this.out);
   }
 
+  /** Let the score go — nothing down there follows you out. */
+  fadeOut(seconds = 2): void {
+    this.tension = 0;
+    this.out.gain.setTargetAtTime(0, this.ctx.currentTime, seconds / 3);
+    this.tensionGain?.gain.setTargetAtTime(0, this.ctx.currentTime, 0.4);
+    this.heartGain?.gain.setTargetAtTime(0, this.ctx.currentTime, 0.4);
+  }
+
   /** Momentary surge — used when an enemy commits to an attack. */
   spike(): void {
     this.tension = Math.max(this.tension, 0.85);

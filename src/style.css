@@ -514,3 +514,89 @@ html, body {
   letter-spacing: 0.2em;
   opacity: 0.8;
 }
+
+/* ---------- Objective tracker ---------- */
+#objective {
+  position: absolute;
+  left: 26px; top: 44px;
+  width: 210px;
+  padding: 9px 12px 10px;
+  background: rgba(8, 8, 4, 0.45);
+  border-left: 2px solid rgba(232, 217, 137, 0.55);
+  text-shadow: 0 0 6px rgba(0,0,0,1);
+}
+
+#objective-title {
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  color: #e8d989;
+  opacity: 0.9;
+}
+
+#objective-pips { display: flex; gap: 5px; margin-top: 7px; }
+.obj-pip {
+  width: 22px; height: 5px;
+  background: rgba(216, 207, 168, 0.16);
+  border: 1px solid rgba(216, 207, 168, 0.35);
+}
+.obj-pip.filled {
+  background: linear-gradient(90deg, #b58b2a, #e8d989);
+  box-shadow: 0 0 8px rgba(232, 217, 137, 0.55);
+}
+
+#objective-track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  opacity: 0.75;
+}
+#objective-arrow {
+  display: flex;
+  width: 15px; height: 15px;
+  color: #e8d989;
+  transition: transform 0.09s linear;
+}
+#objective-arrow svg { width: 15px; height: 15px; }
+#objective.no-signal #objective-arrow { display: none; }
+#objective.close #objective-title { color: #ffe9a8; }
+#objective.ready {
+  border-left-color: #9fd8ff;
+}
+#objective.ready #objective-title { color: #bfe4ff; animation: objPulse 1.6s infinite; }
+@keyframes objPulse { 0%, 100% { opacity: 0.75; } 50% { opacity: 1; } }
+
+/* torch battery */
+.bar-icon.torch { color: #c8b56a; }
+.bar-track.thin { height: 6px; }
+.bar-fill.torch { background: linear-gradient(90deg, #6d5a17, #d8c26a); box-shadow: 0 0 8px rgba(216, 194, 106, 0.4); }
+
+/* ---------- Escape screen ---------- */
+.game-title.out {
+  color: #dff0ff;
+  text-shadow: 0 0 34px rgba(150, 200, 255, 0.55), 0 0 90px rgba(120, 180, 255, 0.3);
+}
+#escape-records {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 26px;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  opacity: 0.6;
+  max-width: 520px;
+}
+#escape-records span strong { color: #e8d989; font-weight: 400; }
+.menu-btn.ghost { opacity: 0.55; font-size: 11px; padding: 8px 18px; }
+.objective-pitch {
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  opacity: 0.55;
+  margin: 0;
+}
+
+/* the white of the impact bleeds into the title card */
+#escape-screen:not(.hidden) { animation: escapeFade 1.7s ease-out; }
+@keyframes escapeFade { from { opacity: 0; } to { opacity: 1; } }

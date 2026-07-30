@@ -12,6 +12,18 @@ const N = CELLS;
 
 type GeoBuckets = Record<string, THREE.BufferGeometry[]>;
 
+/** Backlit product window of an almond water machine — a glow, not a lamp. */
+let vendGlassMat: THREE.MeshStandardMaterial | null = null;
+function vendGlass(): THREE.MeshStandardMaterial {
+  vendGlassMat ??= new THREE.MeshStandardMaterial({
+    color: 0x6d7248,
+    emissive: 0xcfd79a,
+    emissiveIntensity: 0.55,
+    roughness: 0.35,
+  });
+  return vendGlassMat;
+}
+
 function pushBox(
   buckets: GeoBuckets, key: string,
   w: number, h: number, d: number,
@@ -66,6 +78,7 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
     concrete: mats.concrete, tileWall: mats.tileWall, tileFloor: mats.tileFloor,
     metal: mats.metal, frame: mats.fixtureFrame,
     panelOn: mats.fixtureOn, panelOff: mats.fixtureOff,
+    vendGlass: vendGlass(),
   };
   const bm = biomeMats(c.biome);
   const buckets: GeoBuckets = {};
@@ -196,6 +209,27 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
       if (alongX) pushCylinder(buckets, 'metal', 0.07, CHUNK, 'x', wx0 + CHUNK / 2, y, wz0 + lane * CELL + 0.45);
       else pushCylinder(buckets, 'metal', 0.07, CHUNK, 'z', wx0 + lane * CELL + 0.45, y, wz0 + CHUNK / 2);
     }
+  }
+
+  // ---- fuse plinth ----
+  if (c.pedestal) {
+    const p = c.pedestal;
+    pushBox(buckets, 'metal', 0.5, 0.86, 0.5, p.x, p.y + 0.43, p.z);
+    pushBox(buckets, 'frame', 0.72, 0.08, 0.72, p.x, p.y + 0.9, p.z);
+    pushBox(buckets, 'metal', 0.62, 0.05, 0.62, p.x, p.y + 0.03, p.z);
+  }
+
+  // ---- almond water machines ----
+  for (const v of c.vending) {
+    const rot = v.angle;
+    const fx = Math.sin(rot);   // local +z in world space
+    const fz = Math.cos(rot);
+    pushBox(buckets, 'metal', 1.0, 1.9, 0.62, v.x, v.y + 0.95, v.z, rot);
+    // backlit product window, just proud of the front face, in a dark surround
+    pushBox(buckets, 'frame', 0.84, 1.26, 0.03, v.x + fx * 0.31, v.y + 1.18, v.z + fz * 0.31, rot);
+    pushBox(buckets, 'vendGlass', 0.68, 1.1, 0.04, v.x + fx * 0.33, v.y + 1.18, v.z + fz * 0.33, rot);
+    // dispenser slot
+    pushBox(buckets, 'frame', 0.5, 0.1, 0.16, v.x + fx * 0.3, v.y + 0.42, v.z + fz * 0.3, rot);
   }
 
   // ---- tables ----

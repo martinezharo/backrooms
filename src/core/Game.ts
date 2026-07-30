@@ -6,7 +6,7 @@ import { Music } from '../audio/Music';
 import { Enemy, EnemyContext } from '../enemies/Enemy';
 import { Spawner } from '../enemies/Spawner';
 import { Inventory } from '../items/Inventory';
-import { ItemInstance } from '../items/Items';
+import { ItemInstance, makeItem } from '../items/Items';
 import { Pickups } from '../items/Pickups';
 import { Combat, CombatSound } from '../player/Combat';
 import { Player } from '../player/Player';
@@ -14,18 +14,27 @@ import { Stats } from '../player/Stats';
 import { Lighting } from '../rendering/Lighting';
 import { PostFX } from '../rendering/PostFX';
 import { updateWater } from '../rendering/Water';
+import { Escape } from '../rendering/Escape';
 import { BiomeId, biomeForChunk } from '../world/Biomes';
+import { FUSE_COUNT, objectiveLayout } from '../world/Objective';
+import { PortalManager } from '../world/Portal';
 import { World } from '../world/World';
 import { CHUNK } from './constants';
-import { HUD } from '../ui/HUD';
+import { HUD, ObjectiveView } from '../ui/HUD';
 import { InventoryUI } from '../ui/InventoryUI';
 import { Menus } from '../ui/Menus';
 import { Input } from './Input';
+import { loadRecords, noteDepth, noteEscape, noteRunStarted } from './Records';
 
-type GameState = 'menu' | 'playing' | 'paused' | 'dead';
+type GameState = 'menu' | 'playing' | 'paused' | 'dead' | 'escaping' | 'escaped';
 
 const SPAWN_X = 17;
 const SPAWN_Z = 17;
+
+/** torch runs ~5 minutes on one battery */
+const TORCH_DRAIN = 100 / 300;
+/** servings in one almond water machine */
+const VENDING_SERVINGS = 3;
 
 export class Game {
   private state: GameState = 'menu';
@@ -62,6 +71,16 @@ export class Game {
   private message = '';
   private messageTimer = 0;
 
+  // ---- the way out ----
+  private portals: PortalManager;
+  private escape = new Escape();
+  private escapeFuses = 0;
+  private torchCharge = 100;
+  private vendingLeft = new Map<string, number>();
+  private receiverOnExit = false;
+  private pingTimer = 0;
+  private depthTimer = 0;
+
   constructor(seed: number) {
     this.seed = seed;
     const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
@@ -83,6 +102,7 @@ export class Game {
 
     this.world = new World(seed, this.scene);
     this.pickups = new Pickups(this.scene, this.world);
+    this.portals = new PortalManager(this.scene, this.world, seed);
     this.lighting = new Lighting(this.scene, this.world);
     this.combat = new Combat(this.scene, this.player, this.inventory);
     this.spawner = new Spawner(this.scene, this.world);
@@ -97,10 +117,12 @@ export class Game {
       const h = window.innerHeight;
       this.renderer.setSize(w, h);
       this.postfx.setSize(w, h);
+      this.escape.setSize(w, h);
       this.player.camera.aspect = w / h;
       this.player.camera.updateProjectionMatrix();
     });
 
+    this.menus.showRecords(loadRecords());
     this.menus.showStart();
     requestAnimationFrame(() => this.loop());
   }
@@ -113,6 +135,11 @@ export class Game {
     this.menus.onRestart = () => {
       const url = new URL(location.href);
       url.searchParams.set('seed', String(this.seed));
+      location.href = url.toString();
+    };
+    this.menus.onNewSeed = () => {
+      const url = new URL(location.href);
+      url.searchParams.set('seed', String((Math.random() * 0xffffffff) >>> 0));
       location.href = url.toString();
     };
 
@@ -132,7 +159,7 @@ export class Game {
       this.input.exitPointerLock();
       this.invUI.setOpen(false);
       this.hud.setPrompt(null);
-      this.menus.showGameOver(cause, this.survivalTime);
+      this.menus.showGameOver(cause, this.survivalTime, this.fuseCount());
     };
 
     this.combat.onSound = (s: CombatSound) => {
@@ -184,6 +211,10 @@ export class Game {
     this.player.reset(SPAWN_X, SPAWN_Z);
     this.stats.reset();
     this.survivalTime = 0;
+    this.torchCharge = 100;
+    this.vendingLeft.clear();
+    this.receiverOnExit = false;
+    noteRunStarted();
 
     this.hud.show(true);
     this.state = 'playing';
@@ -227,9 +258,17 @@ export class Game {
       // world keeps breathing behind the death screen
       this.lighting.update(this.player.camera, this.time);
       updateWater(this.time);
+    } else if (this.state === 'escaping') {
+      this.time += dt;
+      this.escape.update(dt);
+      this.audio.setWindLevel(this.escape.windLevel);
+      if (this.escape.finished) this.finishEscape();
     }
 
-    if (this.state !== 'menu') {
+    if (this.state === 'escaping' || this.state === 'escaped') {
+      this.escape.render(this.renderer);
+      this.hud.tickFps(dt);
+    } else if (this.state !== 'menu') {
       this.postfx.update(this.time, dt);
       this.postfx.render();
       this.hud.tickFps(dt);
@@ -249,9 +288,24 @@ export class Game {
       if (open) this.input.exitPointerLock();
       else void this.input.requestPointerLock();
     }
-    if (this.input.pressed('KeyF') && this.inventory.has('flashlight')) {
-      this.lighting.setFlashlight(!this.lighting.flashlightOn);
-      this.audio.playSfx('click', 0.5);
+    if (this.input.pressed('KeyF') && this.inventory.has('flashlight')) this.toggleTorch();
+    if (this.input.pressed('KeyR') && !uiOpen && this.inventory.has('detector')) {
+      this.receiverOnExit = !this.receiverOnExit;
+      this.audio.playSfx('click', 0.45);
+    }
+
+    // ---- torch battery ----
+    if (this.lighting.flashlightOn) {
+      this.torchCharge -= TORCH_DRAIN * dt;
+      if (this.torchCharge <= 0) {
+        this.torchCharge = 0;
+        this.lighting.setFlashlight(false);
+        this.audio.playSfx('click', 0.5);
+        // never spend a battery for you — but say plainly how to spend it
+        this.flashMessage(this.inventory.has('battery')
+          ? 'TORCH DEAD — PRESS F TO FIT A BATTERY'
+          : 'TORCH DEAD — FIND A BATTERY');
+      }
     }
     // secret: hug the monster standing next to you
     if (this.input.pressed('KeyH') && !uiOpen) this.tryHug();
@@ -271,23 +325,62 @@ export class Game {
     let prompt: string | null = null;
     let drinkingTap = false;
 
+    // the door out takes priority over anything else you could be touching
+    const portal = this.portals.portal;
+    const atPortal = !uiOpen && !!portal && portal.distanceTo(p.position) < 3.0;
+    if (portal && atPortal) {
+      const fuses = this.fuseCount();
+      if (!portal.isOpen) {
+        prompt = fuses > 0
+          ? `E — FEED ${fuses} FUSE${fuses > 1 ? 'S' : ''} INTO THE DOOR`
+          : 'DEAD DOOR — IT NEEDS FUSES';
+        if (fuses > 0 && this.input.pressed('KeyE')) this.openPortal(fuses);
+      } else {
+        prompt = 'E — STEP THROUGH';
+        if (this.input.pressed('KeyE')) this.beginEscape();
+      }
+    }
+
     const pickup = this.pickups.nearest(p.position, 2.1);
-    if (pickup && !uiOpen) {
+    if (pickup && !uiOpen && !atPortal) {
       prompt = `E — TAKE ${pickup.item.def.name}`;
       if (this.input.pressed('KeyE')) {
         const verdict = this.inventory.canAdd(pickup.item);
         if (verdict === 'ok') {
-          this.inventory.add(this.pickups.take(pickup));
+          const taken = this.pickups.take(pickup);
+          this.inventory.add(taken);
           this.audio.playSfx('pickup', 0.6);
+          // a battery picked up with a dead torch goes straight in — that is
+          // the only reason you bent down for it
+          if (taken.def.id === 'battery' && this.torchCharge <= 1 && this.fitBattery()) {
+            this.flashMessage('BATTERY IN — TORCH READY  [F]');
+          }
         } else {
           this.flashMessage(`${verdict === 'weight' ? 'TOO HEAVY' : 'NO SPACE'} — TAB: BAG, DRAG AN ITEM OUT TO DROP`);
         }
       }
     }
 
+    // almond water machines: instant, but only a few servings each
+    const vend = atPortal ? null : this.nearestVending(1.9);
+    if (vend && !pickup) {
+      const left = this.vendingLeft.get(vend.id) ?? VENDING_SERVINGS;
+      if (left > 0) {
+        prompt = `E — ALMOND WATER (${left} LEFT)`;
+        if (this.input.pressed('KeyE')) {
+          this.vendingLeft.set(vend.id, left - 1);
+          this.stats.thirst = 100;
+          this.audio.playSfx('gulp', 0.6);
+          this.flashMessage('ALMOND WATER — IT TASTES ALMOST LIKE ALMONDS');
+        }
+      } else {
+        prompt = 'EMPTY';
+      }
+    }
+
     // taps: crouch nearby to drink
     const tap = this.nearestTap(1.5);
-    if (tap && !pickup) {
+    if (tap && !pickup && !vend && !atPortal) {
       if (p.crouching) {
         drinkingTap = true;
         prompt = 'DRINKING…';
@@ -364,6 +457,7 @@ export class Game {
     this.lighting.update(p.camera, this.time);
     updateWater(this.time);
     this.pickups.update(this.time);
+    this.portals.update(this.time, dt);
     this.postfx.setUnderwater(p.underwater);
     this.audio.setMuffled(p.underwater);
     this.audio.update(dt);
@@ -372,8 +466,18 @@ export class Game {
     this.music.setTension(danger);
     this.music.update();
 
+    // ---- objective ----
+    this.spawner.setPressure(this.takenFuses() / FUSE_COUNT);
+    this.updateObjective(dt);
+    this.depthTimer -= dt;
+    if (this.depthTimer <= 0) {
+      this.depthTimer = 2;
+      noteDepth(Math.hypot(p.position.x - SPAWN_X, p.position.z - SPAWN_Z));
+    }
+
     // ---- HUD ----
     this.hud.setBars(this.stats.health, this.stats.thirst);
+    this.hud.setTorch(this.inventory.has('flashlight') ? this.torchCharge : null);
     this.damageOverlay = Math.max(0, this.damageOverlay - dt * 1.4);
     this.hud.setDamageOverlay(this.damageOverlay * 0.8 + danger * 0.15);
 
@@ -389,7 +493,10 @@ export class Game {
     let detail = '';
     if (eq?.def.id === 'pistol') detail = `${eq.ammo} rds`;
     else if (eq && isFinite(eq.def.durability)) detail = `${Math.max(0, Math.ceil((eq.durability / eq.def.durability) * 100))}%`;
-    const torch = this.inventory.has('flashlight') ? (this.lighting.flashlightOn ? ' · TORCH ON' : ' · TORCH [F]') : '';
+    const torch = !this.inventory.has('flashlight') ? ''
+      : this.torchCharge <= 1
+        ? (this.inventory.has('battery') ? ' · TORCH DEAD — [F] BATTERY' : ' · TORCH DEAD')
+        : this.lighting.flashlightOn ? ' · TORCH ON' : ' · TORCH [F]';
     this.hud.setEquipped((eq ? `${eq.def.name} · DROP [G]` : 'FISTS') + torch, detail);
     this.hud.setHotbar(this.inventory.items.slice(0, 10).map((p, i) => ({
       key: i === 9 ? '0' : String(i + 1),
@@ -397,6 +504,156 @@ export class Game {
       equipped: this.inventory.equipped === p.item,
     })));
 
+  }
+
+  // ------------------------------------------------------ the objective
+
+  /** Fuses currently in the bag — the only ones that count at the door. */
+  private fuseCount(): number {
+    return this.inventory.items.filter((p) => p.item.def.id === 'fuse').length;
+  }
+
+  /** Fuses pulled out of the world. Dropping one doesn't calm the floor down. */
+  private takenFuses(): number {
+    return objectiveLayout(this.seed).fuses
+      .filter((f) => this.pickups.isConsumed(`fuse:${f.cx},${f.cz}`)).length;
+  }
+
+  private chunkCentre(cx: number, cz: number): THREE.Vector3 {
+    return new THREE.Vector3(cx * CHUNK + CHUNK / 2, 0, cz * CHUNK + CHUNK / 2);
+  }
+
+  /**
+   * Feeds the tracker: which way the receiver is pointing and how far off the
+   * target is. The bearing is relative to where the player is looking, so the
+   * arrow reads like a compass needle rather than a map marker.
+   */
+  private updateObjective(dt: number): void {
+    const layout = objectiveLayout(this.seed);
+    const remaining = layout.fuses.filter((f) => !this.pickups.isConsumed(`fuse:${f.cx},${f.cz}`));
+    const onExit = this.receiverOnExit || remaining.length === 0;
+    const hasReceiver = !!this.inventory.has('detector');
+    const carried = this.fuseCount();
+    const p = this.player.position;
+
+    let target: THREE.Vector3 | null = null;
+    if (onExit) {
+      target = this.portals.portal?.center.clone()
+        ?? this.chunkCentre(layout.exit.cx, layout.exit.cz);
+    } else {
+      let best = Infinity;
+      for (const f of remaining) {
+        const c = this.chunkCentre(f.cx, f.cz);
+        const d = Math.hypot(c.x - p.x, c.z - p.z);
+        if (d < best) { best = d; target = c; }
+      }
+    }
+
+    let bearing: number | null = null;
+    let distance: number | null = null;
+    if (hasReceiver && target) {
+      const dx = target.x - p.x;
+      const dz = target.z - p.z;
+      distance = Math.hypot(dx, dz);
+      const fwd = new THREE.Vector3();
+      this.player.camera.getWorldDirection(fwd);
+      // right-hand vector of the view, flattened: (-fz, fx)
+      bearing = Math.atan2(dx * -fwd.z + dz * fwd.x, dx * fwd.x + dz * fwd.z);
+
+      // the receiver ticks faster the closer the target is
+      this.pingTimer -= dt;
+      if (this.pingTimer <= 0) {
+        this.pingTimer = Math.max(0.32, Math.min(3.4, 0.3 + distance / 110));
+        this.audio.playSfx('ping', 0.11, 0.02);
+      }
+    }
+
+    const key = hasReceiver ? '  [R]' : '';
+    const open = this.portals.portal?.isOpen ?? false;
+    const title = open ? `THE DOOR IS OPEN${key}`
+      : onExit ? (carried > 0 ? `GET TO THE DOOR${key}` : `THE DOOR IS DEAD${key}`)
+        : `FIND THE FUSES${key}`;
+
+    const view: ObjectiveView = {
+      title,
+      // once they're in the door they stay spent, not lost
+      fuses: open ? this.escapeFuses : carried,
+      total: FUSE_COUNT,
+      bearing,
+      distance,
+      ready: open || (onExit && carried > 0),
+    };
+    this.hud.setObjective(view);
+  }
+
+  private openPortal(fuses: number): void {
+    const portal = this.portals.portal;
+    if (!portal) return;
+    for (const placed of [...this.inventory.items]) {
+      if (placed.item.def.id === 'fuse') this.inventory.remove(placed.item);
+    }
+    this.escapeFuses = fuses;
+    portal.open();
+    this.audio.playSfx('fuseIn', 0.8);
+    this.audio.playSfx('portalOpen', 0.75, 0.02);
+    this.music.spike();
+    this.spawner.setPressure(1);
+    this.flashMessage(fuses >= FUSE_COUNT
+      ? 'THE DOOR IS AWAKE. GO.'
+      : 'IT OPENS — NOT ALL THE WAY. GO ANYWAY.');
+  }
+
+  /** Step through: the maze stops rendering and the fall takes over. */
+  private beginEscape(): void {
+    this.state = 'escaping';
+    this.expectUnlock = true;
+    this.input.exitPointerLock();
+    this.invUI.setOpen(false);
+    this.hud.setPrompt(null);
+    this.hud.show(false);
+    this.portals.portal?.setPull(1);
+    this.escape.start(this.seed);
+    this.audio.playSfx('whoosh', 0.9, 0.02);
+    this.audio.startWind();
+    this.audio.duckWorld(1);
+    this.music.fadeOut(2.5);
+  }
+
+  private finishEscape(): void {
+    this.state = 'escaped';
+    this.escape.stop();
+    this.audio.stopWind();
+    this.menus.showEscape(
+      this.escapeFuses,
+      this.survivalTime,
+      noteEscape(this.escapeFuses, this.survivalTime),
+    );
+  }
+
+  /** Spend one battery on the torch. False when there's nothing to spend. */
+  private fitBattery(): boolean {
+    const battery = this.inventory.has('battery');
+    if (!battery || !this.inventory.has('flashlight')) return false;
+    this.inventory.remove(battery);
+    this.torchCharge = 100;
+    this.audio.playSfx('reload', 0.6);
+    return true;
+  }
+
+  /** F: a flat torch takes a battery, otherwise it just switches. */
+  private toggleTorch(): void {
+    if (this.torchCharge <= 1) {
+      if (!this.fitBattery()) {
+        this.flashMessage('TORCH IS DEAD — NO BATTERY');
+        this.lighting.setFlashlight(false);
+        return;
+      }
+      this.lighting.setFlashlight(true);
+      this.flashMessage('BATTERY IN');
+      return;
+    }
+    this.lighting.setFlashlight(!this.lighting.flashlightOn);
+    this.audio.playSfx('click', 0.5);
   }
 
   /** Easter egg: press H right next to a monster to hug it. It melts,
@@ -449,6 +706,42 @@ export class Game {
     this.audio.playSfx('click', 0.4);
   }
 
+  /** Dev/test helper: jump to the exit portal, optionally with fuses in hand. */
+  teleportToExit(withFuses = FUSE_COUNT): boolean {
+    const e = objectiveLayout(this.seed).exit;
+    const x = e.cx * CHUNK + CHUNK / 2;
+    const z = e.cz * CHUNK + CHUNK / 2;
+    this.world.preload(x, z);
+    const portal = this.portals.portal;
+    if (!portal) return false;
+    for (let i = 0; i < withFuses; i++) this.inventory.add(makeItem('fuse'));
+    // stand a couple of metres off, looking straight at it
+    const c = portal.center;
+    const wall = portal.spot.onWall;
+    this.player.position.set(c.x + (wall ? 2.4 : 0), 0.05, c.z + (wall ? 0 : 2.2));
+    this.player.yaw = wall ? Math.PI / 2 : 0;
+    this.player.pitch = wall ? 0 : -0.55;
+    return true;
+  }
+
+  /** Dev/test helper: jump to one of the three fuse rooms. */
+  teleportToFuse(index = 0): boolean {
+    const f = objectiveLayout(this.seed).fuses[index];
+    if (!f) return false;
+    const x = f.cx * CHUNK + CHUNK / 2;
+    const z = f.cz * CHUNK + CHUNK / 2;
+    this.world.preload(x, z);
+    let plinth: { x: number; y: number; z: number } | null = null;
+    for (const c of this.world.allChunks()) {
+      if (c.cx === f.cx && c.cz === f.cz && c.pedestal) plinth = c.pedestal;
+    }
+    if (!plinth) return false;
+    this.player.position.set(plinth.x, plinth.y + 0.05, plinth.z + 3.4);
+    this.player.yaw = 0;
+    this.player.pitch = -0.15;
+    return true;
+  }
+
   /** Dev/test helper: jump to the nearest chunk of a given biome. */
   teleportToBiome(id: BiomeId): boolean {
     const pcx = Math.floor(this.player.position.x / CHUNK);
@@ -471,6 +764,18 @@ export class Game {
       }
     }
     return false;
+  }
+
+  private nearestVending(maxDist: number): { id: string } | null {
+    const p = this.player.position;
+    for (const c of this.world.allChunks()) {
+      for (const v of c.vending) {
+        const dx = v.x - p.x;
+        const dz = v.z - p.z;
+        if (dx * dx + dz * dz < maxDist * maxDist && Math.abs(v.y - p.y) < 1.6) return v;
+      }
+    }
+    return null;
   }
 
   private nearestTap(maxDist: number): { x: number; z: number } | null {

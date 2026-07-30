@@ -33,6 +33,23 @@ const ICONS: Record<string, string> = {
     + '<rect x="11" y="3.2" width="2" height="2.6"/>'
     + '<path d="M11.6 4.4C8.5 4.4 6.6 6 6.3 8.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
   ),
+  fuse: wrap(
+    '<rect x="6.5" y="9" width="11" height="6" rx="1"/>'
+    + '<rect x="2.5" y="9.8" width="4" height="4.4" rx="0.8"/>'
+    + '<rect x="17.5" y="9.8" width="4" height="4.4" rx="0.8"/>'
+    + '<path d="M8.5 12h7" fill="none" stroke="#0e0c04" stroke-width="1.4"/>',
+  ),
+  battery: wrap(
+    '<rect x="4" y="7" width="14" height="10" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.9"/>'
+    + '<rect x="18.6" y="10" width="2.4" height="4" rx="0.8"/>'
+    + '<rect x="6.2" y="9.2" width="4" height="5.6" rx="0.7"/>',
+  ),
+  detector: wrap(
+    '<rect x="4.5" y="8.5" width="12" height="11" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.8"/>'
+    + '<rect x="6.8" y="10.8" width="7.4" height="4.4" rx="0.8"/>'
+    + '<path d="M16 8.5 20 3.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>'
+    + '<circle cx="20.4" cy="2.6" r="1.5"/>',
+  ),
   flashlight: wrap(
     '<path d="M8.5 2.5h7l-1.2 6h-4.6l-1.2-6z"/>'
     + '<path d="M9.8 9.5h4.4V20a1.4 1.4 0 0 1-1.4 1.4h-1.6A1.4 1.4 0 0 1 9.8 20V9.5z"/>'

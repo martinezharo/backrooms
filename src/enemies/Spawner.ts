@@ -32,6 +32,17 @@ export class Spawner {
   private scene: THREE.Scene;
   private world: World;
   private timer = FIRST_GRACE;
+  /** 0..1 — rises with every fuse pulled; the level notices. */
+  private pressure = 0;
+
+  /** How aware the floor is of what you're doing. */
+  setPressure(p: number): void {
+    this.pressure = Math.max(0, Math.min(1, p));
+  }
+
+  private get maxEnemies(): number {
+    return MAX_ENEMIES + Math.round(this.pressure * 3);
+  }
 
   onSpawn: ((e: Enemy) => void) | null = null;
   onRemove: ((e: Enemy) => void) | null = null;
@@ -71,15 +82,16 @@ export class Spawner {
     // steady trickle of spawns while below the cap (befriended ones don't count)
     this.timer -= dt;
     if (this.timer <= 0) {
-      if (this.hostileCount() < MAX_ENEMIES) {
+      const hurry = 1 - this.pressure * 0.55;
+      if (this.hostileCount() < this.maxEnemies) {
         const before = this.enemies.length;
         this.trySpawn(ctx.player.position);
         // no valid hidden spot — retry shortly instead of waiting a full cycle
         this.timer = this.enemies.length > before
-          ? SPAWN_EVERY_MIN + Math.random() * SPAWN_EVERY_RAND
+          ? (SPAWN_EVERY_MIN + Math.random() * SPAWN_EVERY_RAND) * hurry
           : 4;
       } else {
-        this.timer = SPAWN_EVERY_MIN;
+        this.timer = SPAWN_EVERY_MIN * hurry;
       }
     }
   }
@@ -108,7 +120,7 @@ export class Spawner {
     }
     const count = Ctor === Hound ? 2 + (Math.random() < 0.4 ? 1 : 0) : 1;
     for (let i = 0; i < count; i++) {
-      if (this.hostileCount() >= MAX_ENEMIES) break;
+      if (this.hostileCount() >= this.maxEnemies) break;
       const e = new Ctor();
       const p = spot.clone();
       p.x += (Math.random() - 0.5) * 2;

@@ -59,6 +59,24 @@ export const ITEMS: Record<string, ItemDef> = {
     damage: 0, cooldown: 0, durability: Infinity, range: 0,
     description: 'Press F. Smilers hate it.',
   },
+  detector: {
+    id: 'detector', name: 'FIELD RECEIVER',
+    weight: 1, gridW: 2, gridH: 1, kind: 'tool',
+    damage: 0, cooldown: 0, durability: Infinity, range: 0,
+    description: 'Points at whatever the level is hiding. Carry it, it works from the bag.',
+  },
+  fuse: {
+    id: 'fuse', name: 'FUSE',
+    weight: 1, gridW: 1, gridH: 1, kind: 'tool',
+    damage: 0, cooldown: 0, durability: Infinity, range: 0,
+    description: 'Three of these wake the door up. Do not drop it.',
+  },
+  battery: {
+    id: 'battery', name: 'BATTERY',
+    weight: 1, gridW: 1, gridH: 1, kind: 'tool',
+    damage: 0, cooldown: 0, durability: Infinity, range: 0,
+    description: 'Torch juice. Press F on a dead torch to swap it in.',
+  },
   ammo: {
     id: 'ammo', name: '9MM BOX',
     weight: 1, gridW: 1, gridH: 1, kind: 'ammo',
