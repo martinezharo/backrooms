@@ -103,6 +103,80 @@ function doorCellsOfLine(line: Uint8Array): number[] {
   return out;
 }
 
+/** Smallest room side, in cells (3 cells = 6 m). */
+const MIN_ROOM = 3;
+
+function setWallSpan(c: ChunkData, axis: 0 | 1, line: number, from: number, to: number) {
+  for (let k = from; k < to; k++) {
+    if (axis === 0) c.wallsV[line * N + k] = 1;
+    else c.wallsH[line * N + k] = 1;
+  }
+}
+
+/** Knock a doorless opening (1-2 cells wide) out of a wall span. */
+function carveDoorway(rng: Rng, c: ChunkData, axis: 0 | 1, line: number, from: number, to: number) {
+  const width = rng() < 0.28 ? 2 : 1;
+  const p = randInt(rng, from, Math.max(from + 1, to - width + 1));
+  for (let w = 0; w < width && p + w < to; w++) {
+    if (axis === 0) c.wallsV[line * N + p + w] = 0;
+    else c.wallsH[line * N + p + w] = 0;
+  }
+}
+
+/**
+ * Level 0 layout: recursively partition the chunk into rooms. Every split drops
+ * a full wall and then punches one or two doorless openings through it, so the
+ * result is a connected warren of rooms and corridors instead of one big hall
+ * with loose partitions floating in it. Splits occasionally lay down two
+ * parallel walls a cell apart, which reads as a corridor with rooms off it.
+ */
+function bspRooms(rng: Rng, c: ChunkData, i0: number, j0: number, i1: number, j1: number, depth: number) {
+  const w = i1 - i0;
+  const h = j1 - j0;
+  const canV = w >= MIN_ROOM * 2;
+  const canH = h >= MIN_ROOM * 2;
+  if (!canV && !canH) return;
+  // Stop early now and then so room sizes spread out instead of all converging
+  // on the minimum — a few wide bays among the small rooms. Only small rects
+  // get the reprieve; anything large keeps subdividing or the chunk reads as a
+  // hall again.
+  if (depth >= 2 && w * h <= 42 && rng() < 0.5) return;
+
+  const vertical = canV && canH
+    ? (w > h + 1 ? true : h > w + 1 ? false : rng() < 0.5)
+    : canV;
+  const axis: 0 | 1 = vertical ? 0 : 1;
+
+  // The wall runs across the rect's other dimension.
+  const span0 = vertical ? j0 : i0;
+  const span1 = vertical ? j1 : i1;
+  const lo = (vertical ? i0 : j0) + MIN_ROOM;
+  const hi = (vertical ? i1 : j1) - MIN_ROOM; // inclusive
+  const line = randInt(rng, lo, hi + 1);
+
+  // A corridor needs a spare cell between the two halves.
+  const corridor = line < hi && rng() < 0.3;
+  const doors = () => 1 + (span1 - span0 >= 8 && rng() < 0.5 ? 1 : 0);
+
+  setWallSpan(c, axis, line, span0, span1);
+  for (let d = doors(); d > 0; d--) carveDoorway(rng, c, axis, line, span0, span1);
+
+  let far = line;
+  if (corridor) {
+    far = line + 1;
+    setWallSpan(c, axis, far, span0, span1);
+    for (let d = doors(); d > 0; d--) carveDoorway(rng, c, axis, far, span0, span1);
+  }
+
+  if (vertical) {
+    bspRooms(rng, c, i0, j0, line, j1, depth + 1);
+    bspRooms(rng, c, far, j0, i1, j1, depth + 1);
+  } else {
+    bspRooms(rng, c, i0, j0, i1, line, depth + 1);
+    bspRooms(rng, c, i0, far, i1, j1, depth + 1);
+  }
+}
+
 /** Carve straight wall runs with random gaps (Level 0 partitions). */
 function wallRuns(rng: Rng, wallsV: Uint8Array, wallsH: Uint8Array, count: number, gapChance: number) {
   for (let r = 0; r < count; r++) {
@@ -238,8 +312,10 @@ export function generateChunk(seed: number, cx: number, cz: number): ChunkData {
   // ---- interior layout per biome ----
   switch (biome) {
     case BiomeId.Level0: {
-      wallRuns(rng, c.wallsV, c.wallsH, randInt(rng, 6, 11), 0.3);
-      const pillars = randInt(rng, 0, 4);
+      bspRooms(rng, c, 0, 0, N, N, 0);
+      // a couple of free-standing stubs so not every room is a clean box
+      wallRuns(rng, c.wallsV, c.wallsH, randInt(rng, 1, 4), 0.45);
+      const pillars = randInt(rng, 0, 3);
       for (let p = 0; p < pillars; p++) {
         c.solid[idx(randInt(rng, 2, N - 2), randInt(rng, 2, N - 2))] = 1;
       }
