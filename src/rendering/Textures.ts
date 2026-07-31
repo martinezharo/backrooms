@@ -208,8 +208,11 @@ function metal(): HTMLCanvasElement {
  * Scrawled graffiti decals for Level 0 walls. Transparent canvases: a hand
  * that shook, paint that ran, and a message nobody stayed around to explain.
  */
+export type GraffitiLocale = 'en' | 'es';
+
 interface GraffitiSpec {
-  lines: string[];
+  /** the same tag in every language we have it in; index is the variant id */
+  lines: Record<GraffitiLocale, string[]>;
   color: string;
   size: number;
   /** tally marks scratched under the text — someone was counting days */
@@ -217,15 +220,32 @@ interface GraffitiSpec {
 }
 
 const GRAFFITI: GraffitiSpec[] = [
-  { lines: ['NO', 'ESTÁS', 'SOLO'], color: '#7a1414', size: 58 },
-  { lines: ['SIGUE', 'CAMINANDO'], color: '#1d1d1d', size: 46 },
-  { lines: ['ELLOS NO', 'PARPADEAN'], color: '#5c1020', size: 44 },
-  { lines: ['LA SALIDA', 'MIENTE'], color: '#2b1a06', size: 44 },
-  { lines: ['DÍA'], color: '#181818', size: 56, tally: 23 },
-  { lines: ['NO MIRES', 'ATRÁS'], color: '#6d1616', size: 46 },
-  { lines: ['YO TAMBIÉN', 'ERA NUEVO'], color: '#22200f', size: 40 },
-  { lines: ['APAGA', 'LA LUZ'], color: '#4a0f0f', size: 50 },
+  { lines: { en: ['YOU ARE', 'NOT', 'ALONE'], es: ['NO', 'ESTÁS', 'SOLO'] }, color: '#7a1414', size: 52 },
+  { lines: { en: ['KEEP', 'WALKING'], es: ['SIGUE', 'CAMINANDO'] }, color: '#1d1d1d', size: 50 },
+  { lines: { en: ['THEY', "DON'T BLINK"], es: ['ELLOS NO', 'PARPADEAN'] }, color: '#5c1020', size: 46 },
+  { lines: { en: ['THE EXIT', 'LIES'], es: ['LA SALIDA', 'MIENTE'] }, color: '#2b1a06', size: 48 },
+  { lines: { en: ['DAY'], es: ['DÍA'] }, color: '#181818', size: 56, tally: 23 },
+  { lines: { en: ["DON'T", 'LOOK BACK'], es: ['NO MIRES', 'ATRÁS'] }, color: '#6d1616', size: 48 },
+  { lines: { en: ['I WAS NEW', 'HERE TOO'], es: ['YO TAMBIÉN', 'ERA NUEVO'] }, color: '#22200f', size: 42 },
+  { lines: { en: ['TURN OFF', 'THE LIGHT'], es: ['APAGA', 'LA LUZ'] }, color: '#4a0f0f', size: 46 },
 ];
+
+let graffitiLocale: GraffitiLocale = 'en';
+
+/**
+ * Pick the language the walls are written in. Variant ids are shared across
+ * locales, so world generation is untouched by the choice. Call before the
+ * first chunk is built — it drops the cached decals so they are repainted.
+ */
+export function setGraffitiLocale(locale: GraffitiLocale): void {
+  if (locale === graffitiLocale) return;
+  graffitiLocale = locale;
+  for (const m of graffitiCache ?? []) {
+    m.map?.dispose();
+    m.dispose();
+  }
+  graffitiCache = null;
+}
 
 /** Draw one line of text letter by letter, each nudged and tilted by hand. */
 function scrawlLine(
@@ -295,10 +315,11 @@ function graffitiCanvas(spec: GraffitiSpec, seed: number): HTMLCanvasElement {
   ctx.fillStyle = spec.color;
   ctx.strokeStyle = spec.color;
 
-  const rows = spec.lines.length + (spec.tally ? 1 : 0);
+  const lines = spec.lines[graffitiLocale] ?? spec.lines.en;
+  const rows = lines.length + (spec.tally ? 1 : 0);
   const lineH = spec.size * 1.12;
   let y = size / 2 - ((rows - 1) * lineH) / 2;
-  for (const line of spec.lines) {
+  for (const line of lines) {
     scrawlLine(ctx, line, size / 2, y, spec.size, rng);
     y += lineH;
   }
