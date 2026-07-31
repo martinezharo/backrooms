@@ -228,11 +228,11 @@ const GRAFFITI: GraffitiSpec[] = [
   { lines: { en: ["DON'T", 'LOOK BACK'], es: ['NO MIRES', 'ATRÁS'] }, color: '#6d1616', size: 48 },
   { lines: { en: ['I WAS NEW', 'HERE TOO'], es: ['YO TAMBIÉN', 'ERA NUEVO'] }, color: '#22200f', size: 42 },
   { lines: { en: ['TURN OFF', 'THE LIGHT'], es: ['APAGA', 'LA LUZ'] }, color: '#4a0f0f', size: 46 },
-  { lines: { en: ['BE MY', 'CAPIBARA'], es: ['SÉ MI', 'CAPIBARA'] }, color: '#432a0c', size: 50 },
+  { lines: { en: ['BE MY', 'CAPYBARA'], es: ['SÉ MI', 'CAPYBARA'] }, color: '#432a0c', size: 50 },
   {
     lines: {
       en: ['BE VERY', 'CAREFUL WITH', 'THE CAPYBARA'],
-      es: ['MUCHO', 'CUIDADO CON', 'EL CAPIBARA'],
+      es: ['MUCHO', 'CUIDADO CON', 'EL CAPYBARA'],
     },
     color: '#5c1020', size: 38,
   },
