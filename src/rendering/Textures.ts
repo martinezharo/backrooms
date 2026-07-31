@@ -204,6 +204,190 @@ function metal(): HTMLCanvasElement {
   return c;
 }
 
+/**
+ * Scrawled graffiti decals for Level 0 walls. Transparent canvases: a hand
+ * that shook, paint that ran, and a message nobody stayed around to explain.
+ */
+export type GraffitiLocale = 'en' | 'es';
+
+interface GraffitiSpec {
+  /** the same tag in every language we have it in; index is the variant id */
+  lines: Record<GraffitiLocale, string[]>;
+  color: string;
+  size: number;
+  /** tally marks scratched under the text — someone was counting days */
+  tally?: number;
+}
+
+const GRAFFITI: GraffitiSpec[] = [
+  { lines: { en: ['YOU ARE', 'NOT', 'ALONE'], es: ['NO', 'ESTÁS', 'SOLO'] }, color: '#7a1414', size: 52 },
+  { lines: { en: ['KEEP', 'WALKING'], es: ['SIGUE', 'CAMINANDO'] }, color: '#1d1d1d', size: 50 },
+  { lines: { en: ['THEY', "DON'T BLINK"], es: ['ELLOS NO', 'PARPADEAN'] }, color: '#5c1020', size: 46 },
+  { lines: { en: ['THE EXIT', 'LIES'], es: ['LA SALIDA', 'MIENTE'] }, color: '#2b1a06', size: 48 },
+  { lines: { en: ['DAY'], es: ['DÍA'] }, color: '#181818', size: 56, tally: 23 },
+  { lines: { en: ["DON'T", 'LOOK BACK'], es: ['NO MIRES', 'ATRÁS'] }, color: '#6d1616', size: 48 },
+  { lines: { en: ['I WAS NEW', 'HERE TOO'], es: ['YO TAMBIÉN', 'ERA NUEVO'] }, color: '#22200f', size: 42 },
+  { lines: { en: ['TURN OFF', 'THE LIGHT'], es: ['APAGA', 'LA LUZ'] }, color: '#4a0f0f', size: 46 },
+  { lines: { en: ['BE MY', 'CAPYBARA'], es: ['SÉ MI', 'CAPYBARA'] }, color: '#432a0c', size: 50 },
+  {
+    lines: {
+      en: ['BE VERY', 'CAREFUL WITH', 'THE CAPYBARA'],
+      es: ['MUCHO', 'CUIDADO CON', 'EL CAPYBARA'],
+    },
+    color: '#5c1020', size: 38,
+  },
+  { lines: { en: ['MEOW'], es: ['MIAU'] }, color: '#1d1d1d', size: 66 },
+  { lines: { en: ['SEMPITERNA'], es: ['SEMPITERNA'] }, color: '#2b1a06', size: 52 },
+];
+
+let graffitiLocale: GraffitiLocale = 'en';
+
+/**
+ * Pick the language the walls are written in. Variant ids are shared across
+ * locales, so world generation is untouched by the choice. Call before the
+ * first chunk is built — it drops the cached decals so they are repainted.
+ */
+export function setGraffitiLocale(locale: GraffitiLocale): void {
+  if (locale === graffitiLocale) return;
+  graffitiLocale = locale;
+  for (const m of graffitiCache ?? []) {
+    m.map?.dispose();
+    m.dispose();
+  }
+  graffitiCache = null;
+}
+
+/** Draw one line of text letter by letter, each nudged and tilted by hand. */
+function scrawlLine(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cx: number,
+  cy: number,
+  size: number,
+  rng: () => number,
+) {
+  const font = (px: number) => `bold ${px}px "Trebuchet MS", Impact, sans-serif`;
+  ctx.font = font(size);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const chars = [...text];
+  const measure = () => chars.map((ch) => ctx.measureText(ch).width);
+  // long words shrink to fit rather than running off the edge of the canvas
+  let widths = measure();
+  const budget = cx * 2 * 0.88;
+  const raw = widths.reduce((a, b) => a + b, 0);
+  if (raw > budget) {
+    ctx.font = font(size * (budget / raw));
+    widths = measure();
+  }
+  const total = widths.reduce((a, b) => a + b, 0);
+  let x = cx - total / 2;
+  for (let i = 0; i < chars.length; i++) {
+    const w = widths[i];
+    ctx.save();
+    ctx.translate(x + w / 2, cy + (rng() - 0.5) * size * 0.18);
+    ctx.rotate((rng() - 0.5) * 0.24);
+    ctx.fillText(chars[i], 0, 0);
+    ctx.restore();
+    x += w;
+  }
+}
+
+/** Paint that ran before it dried. */
+function drips(ctx: CanvasRenderingContext2D, size: number, rng: () => number, color: string, count: number) {
+  for (let i = 0; i < count; i++) {
+    const x = size * (0.15 + rng() * 0.7);
+    const y = size * (0.3 + rng() * 0.4);
+    const len = size * (0.06 + rng() * 0.22);
+    const g = ctx.createLinearGradient(0, y, 0, y + len);
+    g.addColorStop(0, color);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, 1 + rng() * 2.5, len);
+  }
+}
+
+/** Eat holes in the alpha channel so the paint reads as flaked and old. */
+function erode(ctx: CanvasRenderingContext2D, size: number, rng: () => number) {
+  const img = ctx.getImageData(0, 0, size, size);
+  const d = img.data;
+  for (let i = 3; i < d.length; i += 4) {
+    if (!d[i]) continue;
+    d[i] = Math.max(0, Math.min(255, d[i] * (0.55 + rng() * 0.55)));
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+function graffitiCanvas(spec: GraffitiSpec, seed: number): HTMLCanvasElement {
+  const size = 256;
+  const [c, ctx] = makeCanvas(size);
+  const rng = mulberry32(seed);
+  ctx.fillStyle = spec.color;
+  ctx.strokeStyle = spec.color;
+
+  const lines = spec.lines[graffitiLocale] ?? spec.lines.en;
+  const rows = lines.length + (spec.tally ? 1 : 0);
+  const lineH = spec.size * 1.12;
+  let y = size / 2 - ((rows - 1) * lineH) / 2;
+  for (const line of lines) {
+    scrawlLine(ctx, line, size / 2, y, spec.size, rng);
+    y += lineH;
+  }
+  if (spec.tally) {
+    // groups of five, the fifth struck through — and the last group unfinished
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    const groups = Math.ceil(spec.tally / 5);
+    const gw = size * 0.7 / groups;
+    for (let g = 0; g < groups; g++) {
+      const n = Math.min(5, spec.tally - g * 5);
+      const gx = size * 0.15 + g * gw;
+      for (let m = 0; m < Math.min(n, 4); m++) {
+        const mx = gx + m * (gw * 0.16);
+        ctx.beginPath();
+        ctx.moveTo(mx + (rng() - 0.5) * 3, y - 22);
+        ctx.lineTo(mx + (rng() - 0.5) * 3, y + 22);
+        ctx.stroke();
+      }
+      if (n === 5) {
+        ctx.beginPath();
+        ctx.moveTo(gx - 6, y + 16);
+        ctx.lineTo(gx + gw * 0.16 * 3 + 8, y - 16);
+        ctx.stroke();
+      }
+    }
+  }
+
+  drips(ctx, size, rng, spec.color, 7);
+  erode(ctx, size, rng);
+  return c;
+}
+
+function decalTexture(c: HTMLCanvasElement): THREE.CanvasTexture {
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
+}
+
+let graffitiCache: THREE.MeshStandardMaterial[] | null = null;
+
+/** Shared graffiti decal materials, one per phrase. */
+export function getGraffitiMaterials(): THREE.MeshStandardMaterial[] {
+  graffitiCache ??= GRAFFITI.map((spec, i) => new THREE.MeshStandardMaterial({
+    map: decalTexture(graffitiCanvas(spec, 9001 + i * 17)),
+    transparent: true,
+    depthWrite: false,
+    alphaTest: 0.02,
+    roughness: 0.95,
+    metalness: 0,
+  }));
+  return graffitiCache;
+}
+
+export const GRAFFITI_COUNT = GRAFFITI.length;
+
 export interface WorldMaterials {
   wall: THREE.MeshStandardMaterial;        // L0 wallpaper
   carpet: THREE.MeshStandardMaterial;
