@@ -7,8 +7,9 @@
 // coordinates, so both neighbouring chunks compute identical border walls/doors.
 
 import * as THREE from 'three';
-import { CELLS, CELL, CHUNK } from '../core/constants';
+import { CELLS, CELL, CHUNK, WALL_THICKNESS } from '../core/constants';
 import { chunkRng, hash3, mulberry32, randInt, Rng } from '../core/rng';
+import { GRAFFITI_COUNT } from '../rendering/Textures';
 import { BiomeId, BIOMES, biomeForChunk } from './Biomes';
 import { fuseSiteAt, isExitChunk, objectiveLayout } from './Objective';
 
@@ -21,6 +22,16 @@ export interface LightFixture {
 }
 
 export interface TapSpot { x: number; y: number; z: number; angle: number; }
+/**
+ * A tag sprayed on a wall face by someone who got here first. `angle` is the
+ * yaw that turns the decal's local +z into the direction it faces.
+ */
+export interface GraffitiSpot {
+  x: number; y: number; z: number;
+  angle: number;
+  variant: number;
+  size: number;
+}
 export interface TableSpot { x: number; z: number; }
 export interface ItemSpawn { id: string; itemId: string; x: number; y: number; z: number; }
 /** Plinth holding one of the three fuses. */
@@ -53,6 +64,7 @@ export interface ChunkData {
   water: Uint8Array;       // per-cell water flag
   lights: LightFixture[];
   taps: TapSpot[];
+  graffiti: GraffitiSpot[];
   tables: TableSpot[];
   itemSpawns: ItemSpawn[];
   pedestal: PedestalSpot | null;
@@ -284,6 +296,7 @@ export function generateChunk(seed: number, cx: number, cz: number): ChunkData {
     water: new Uint8Array(N * N),
     lights: [],
     taps: [],
+    graffiti: [],
     tables: [],
     itemSpawns: [],
     pedestal: null,
@@ -492,6 +505,41 @@ export function generateChunk(seed: number, cx: number, cz: number): ChunkData {
           c.taps.push({ x: cxw, y: c.floor[k] + 0.95, z: wz0 + (j + 1) * CELL - 0.14, angle: -Math.PI / 2 });
           break;
         }
+      }
+    }
+  }
+
+  // ---- graffiti (Level 0 only, rare) ----
+  // Most rooms are untouched; now and then a wall has something scrawled on it
+  // by whoever passed through before you did.
+  if (biome === BiomeId.Level0 && rng() < 0.12) {
+    const tags = rng() < 0.25 ? 2 : 1;
+    for (let t = 0; t < tags; t++) {
+      for (let tries = 0; tries < 30; tries++) {
+        const i = randInt(rng, 1, N - 1);
+        const j = randInt(rng, 1, N - 1);
+        const k = idx(i, j);
+        if (c.solid[k] || c.water[k]) continue;
+        const [gx, gz] = cellCenter(i, j);
+        // face offset: half the wall thickness, plus a hair to clear z-fighting
+        const off = WALL_THICKNESS / 2 + 0.012;
+        const y = c.floor[k] + 1.15 + rng() * 0.45;
+        const size = 1.2 + rng() * 0.5;
+        const variant = randInt(rng, 0, GRAFFITI_COUNT);
+        // drift along the wall so tags don't all sit dead-centre on a segment
+        const slide = (rng() - 0.5) * (CELL - size) * 0.8;
+        if (c.wallsV[i * N + j]) {
+          c.graffiti.push({ x: wx0 + i * CELL + off, y, z: gz + slide, angle: Math.PI / 2, variant, size });
+        } else if (c.wallsV[(i + 1) * N + j]) {
+          c.graffiti.push({ x: wx0 + (i + 1) * CELL - off, y, z: gz + slide, angle: -Math.PI / 2, variant, size });
+        } else if (c.wallsH[j * N + i]) {
+          c.graffiti.push({ x: gx + slide, y, z: wz0 + j * CELL + off, angle: 0, variant, size });
+        } else if (c.wallsH[(j + 1) * N + i]) {
+          c.graffiti.push({ x: gx + slide, y, z: wz0 + (j + 1) * CELL - off, angle: Math.PI, variant, size });
+        } else {
+          continue;
+        }
+        break;
       }
     }
   }

@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CELL, CELLS, CHUNK, WALL_THICKNESS } from '../core/constants';
-import { getWorldMaterials } from '../rendering/Textures';
+import { getGraffitiMaterials, getWorldMaterials } from '../rendering/Textures';
 import { getWaterMaterial } from '../rendering/Water';
 import { BiomeId, BIOMES, biomeForChunk } from './Biomes';
 import { ChunkData } from './Chunk';
@@ -80,6 +80,7 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
     panelOn: mats.fixtureOn, panelOff: mats.fixtureOff,
     vendGlass: vendGlass(),
   };
+  getGraffitiMaterials().forEach((m, i) => { matByKey[`graffiti${i}`] = m; });
   const bm = biomeMats(c.biome);
   const buckets: GeoBuckets = {};
   const wx0 = c.cx * CHUNK;
@@ -230,6 +231,14 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
     pushBox(buckets, 'vendGlass', 0.68, 1.1, 0.04, v.x + fx * 0.33, v.y + 1.18, v.z + fz * 0.33, rot);
     // dispenser slot
     pushBox(buckets, 'frame', 0.5, 0.1, 0.16, v.x + fx * 0.3, v.y + 0.42, v.z + fz * 0.3, rot);
+  }
+
+  // ---- graffiti decals ----
+  for (const g of c.graffiti) {
+    const geo = new THREE.PlaneGeometry(g.size, g.size);
+    geo.rotateY(g.angle);
+    geo.translate(g.x, g.y, g.z);
+    (buckets[`graffiti${g.variant}`] ??= []).push(geo);
   }
 
   // ---- tables ----
