@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>The Backrooms — Free Browser Horror Game · No Download, Play Instantly</title>
   <meta name="description" content="Play The Backrooms free in your browser: a first-person survival horror game set in an infinite procedurally generated maze, hunted by entities that stalk you from the dark. No download, no install, no sign-up — click and play." />
   <meta name="keywords" content="backrooms, backrooms game, free horror game, browser horror game, no download games, play backrooms online, survival horror online, webgl horror game, free online games" />
@@ -94,13 +97,24 @@
       <div id="friend-speech"></div>
     </div>
 
+    <!-- On-screen controls (touch devices only; buttons built in TS) -->
+    <div id="touch-controls" class="hidden">
+      <div id="touch-move-zone"></div>
+      <div id="touch-look-zone"></div>
+      <div id="touch-stick"><div id="touch-stick-knob"></div></div>
+      <div id="touch-actions"></div>
+      <div id="touch-tools"></div>
+      <div id="touch-pause"></div>
+    </div>
+
     <!-- Inventory overlay -->
     <div id="inventory-screen" class="overlay hidden">
       <div id="inventory-panel">
         <h2>INVENTORY</h2>
         <div id="inventory-weight"></div>
         <div id="inventory-grid"></div>
-        <div id="inventory-hint">Click: equip / unequip &nbsp;·&nbsp; Hover: inspect &nbsp;·&nbsp; Drag out of the bag: drop &nbsp;·&nbsp; G: drop equipped &nbsp;·&nbsp; TAB: close</div>
+        <div class="inventory-hint mouse-only">Click: equip / unequip &nbsp;·&nbsp; Hover: inspect &nbsp;·&nbsp; Drag out of the bag: drop &nbsp;·&nbsp; G: drop equipped &nbsp;·&nbsp; TAB: close</div>
+        <div class="inventory-hint touch-only">Tap: equip / unequip &nbsp;·&nbsp; DROP: throw down what you hold &nbsp;·&nbsp; BAG: close</div>
       </div>
       <canvas id="inspect-canvas" width="280" height="280" class="hidden"></canvas>
       <div id="inspect-label" class="hidden"></div>
@@ -164,11 +178,12 @@
           <p>WASD move · Mouse look · Space jump · C/Ctrl crouch · Shift run</p>
           <p>E interact · LMB attack · RMB block/aim · TAB inventory · G drop held item · F torch · R switch receiver</p>
           <p>1–9/0 quick equip · mouse wheel cycle items</p>
+          <p class="touch-only">On phones and tablets: left thumb steers, right thumb looks, buttons do the rest. Push the stick to the rim to sprint. Tap the hotbar to swap what's in your hand.</p>
         </section>
       </main>
 
       <footer class="landing-footer">
-        <p>The Backrooms — a free WebGL horror game. No download · no install · no ads · works in Chrome, Firefox, Edge and Safari.</p>
+        <p>The Backrooms — a free WebGL horror game. No download · no install · no ads · works in Chrome, Firefox, Edge and Safari, on desktop and on mobile.</p>
       </footer>
     </div>
 

@@ -6,7 +6,8 @@
 download, no sign-up.
 
 First-person survival horror set in the Backrooms, running **entirely in the
-browser**. Three.js / WebGL, TypeScript, Vite.
+browser** — mouse and keyboard on a desktop, thumbstick and buttons on a phone.
+Three.js / WebGL, TypeScript, Vite.
 
 **Every asset is procedural.** Textures are painted on canvases at runtime,
 monsters are built from organic lathe geometry with generated skin textures,
@@ -132,6 +133,19 @@ item out of the panel to drop it.
 | R | Point the receiver at the fuses / at the exit |
 | Esc | Pause |
 
+### On a phone or tablet
+
+Touch devices get on-screen controls automatically: a thumbstick that appears
+wherever your left thumb lands (**push it to the rim to sprint**), a look pad
+under your right thumb, and buttons for everything else — HIT, BLOCK, USE,
+JUMP, plus latching RUN and CROUCH. The top row holds BAG, TORCH, RCVR, DROP,
+a hug button and pause. Tap a hotbar slot to put that item in your hand; the
+bag itself is tap-to-equip and DROP throws down what you're holding. Starting a
+run asks for full screen and landscape, and the HUD reflows around your thumbs.
+
+Force the controls on or off with `?touch=1` / `?touch=0` — handy for trying
+the layout on a desktop.
+
 ## Project structure
 
 ```
@@ -143,7 +157,7 @@ src/
 ├── audio/       WebAudio synthesis: SFX, ambiences, cues, procedural score
 ├── rendering/   Lighting (threat-aware torch), water shader, post FX, textures
 ├── items/       Item defs, grid inventory, world pickups, item meshes
-└── ui/          HUD + hotbar, inventory UI, menus, SVG icons
+└── ui/          HUD + hotbar, inventory UI, menus, touch controls, SVG icons
 ```
 
 ## Dev scripts
@@ -153,6 +167,7 @@ on port 5199 first, e.g. `pnpm dev --port 5199`):
 
 ```sh
 node scripts/smoke.mjs    # boots the game, walks, opens UI, reports errors
+node scripts/mobile.mjs   # phone viewport: drives the stick, look pad, buttons
 node scripts/tour.mjs     # screenshots all four levels to /tmp
 node scripts/inspect.mjs  # probes world internals (taps, lights, water, enemies)
 node scripts/escape.mjs   # runs a whole extraction: portal, fuses, the fall
