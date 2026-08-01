@@ -428,7 +428,7 @@ html, body {
 }
 .inv-item .item-durability > div { height: 100%; background: #7a9b5a; }
 
-#inventory-hint { font-size: 11px; opacity: 0.45; letter-spacing: 0.12em; }
+.inventory-hint { font-size: 11px; opacity: 0.45; letter-spacing: 0.12em; }
 
 /* ---------- Quick-access hotbar ---------- */
 #hotbar {
@@ -595,6 +595,184 @@ html, body {
   letter-spacing: 0.22em;
   opacity: 0.55;
   margin: 0;
+}
+
+/* ---------- Touch controls ---------- */
+.touch-only { display: none; }
+body.touch .touch-only { display: block; }
+body.touch .mouse-only { display: none; }
+
+#touch-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 16;
+  pointer-events: none;
+  touch-action: none;
+}
+
+/* the two halves of the screen the thumbs live on */
+#touch-move-zone, #touch-look-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  pointer-events: auto;
+  touch-action: none;
+}
+#touch-move-zone { left: 0; width: 42%; }
+#touch-look-zone { right: 0; width: 58%; }
+
+#touch-stick {
+  position: absolute;
+  left: 104px;
+  top: calc(100% - 166px);
+  width: 128px;
+  height: 128px;
+  margin: -64px 0 0 -64px;
+  border-radius: 50%;
+  border: 1px solid rgba(232, 217, 137, 0.25);
+  background: radial-gradient(circle, rgba(232, 217, 137, 0.07), rgba(0, 0, 0, 0.3));
+  opacity: 0.4;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+}
+#touch-stick.active { opacity: 1; }
+
+#touch-stick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  border-radius: 50%;
+  border: 1px solid rgba(232, 217, 137, 0.55);
+  background: rgba(232, 217, 137, 0.16);
+  box-shadow: 0 0 14px rgba(232, 217, 137, 0.25);
+}
+
+.touch-btn {
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  border: 1px solid rgba(232, 217, 137, 0.35);
+  background: rgba(10, 9, 3, 0.45);
+  color: #e8d989;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.touch-btn.big { width: 88px; height: 88px; font-size: 14px; }
+.touch-btn.small { width: 44px; height: 44px; font-size: 9px; }
+.touch-btn.held, .touch-btn.on {
+  background: rgba(232, 217, 137, 0.22);
+  box-shadow: 0 0 16px rgba(232, 217, 137, 0.35);
+}
+
+#touch-actions {
+  position: absolute;
+  right: 16px;
+  bottom: 18px;
+  display: grid;
+  gap: 10px;
+  align-items: center;
+  justify-items: center;
+  grid-template-areas:
+    "run    crouch jump"
+    "use    block  attack";
+}
+
+#touch-tools {
+  position: absolute;
+  top: 10px;
+  right: 64px;
+  display: flex;
+  gap: 8px;
+}
+
+#touch-pause { position: absolute; top: 10px; right: 10px; }
+
+/* the bag overlay owns the screen: leave only the row that can close it */
+#touch-controls.bag-open #touch-move-zone,
+#touch-controls.bag-open #touch-look-zone,
+#touch-controls.bag-open #touch-stick,
+#touch-controls.bag-open #touch-actions { display: none; }
+
+/* ---------- HUD, rearranged around the thumbs ---------- */
+/* over the controls, so hotbar slots win the taps; the bag replaces it whole */
+body.touch #hud { z-index: 17; }
+body.touch.bag-open #hud { display: none; }
+
+body.touch #biome-label { left: 10px; top: 8px; font-size: 10px; letter-spacing: 0.25em; }
+body.touch #objective { left: 10px; top: 26px; width: 158px; padding: 6px 9px 7px; }
+body.touch #objective-title { font-size: 10px; }
+body.touch #stats-bars { left: 10px; top: 104px; bottom: auto; width: 150px; }
+body.touch #fps-counter { right: auto; left: 50%; transform: translateX(-50%); }
+body.touch #interact-prompt { top: 52%; font-size: 12px; }
+
+body.touch #equipped-label {
+  right: auto;
+  left: 50%;
+  bottom: 58px;
+  transform: translateX(-50%);
+  text-align: center;
+  font-size: 11px;
+}
+
+body.touch #hotbar { bottom: 6px; pointer-events: auto; }
+body.touch .hotbar-slot { width: 38px; height: 38px; cursor: pointer; }
+body.touch .hotbar-icon svg { width: 17px; height: 17px; }
+
+/* held upright there is no room for a row of tools across the top */
+@media (orientation: portrait) {
+  #touch-tools { flex-direction: column; top: 62px; right: 10px; }
+  #touch-stick { left: 82px; top: calc(100% - 168px); }
+  body.touch #hotbar { bottom: 186px; flex-wrap: wrap; justify-content: center; max-width: 92vw; }
+  body.touch #equipped-label { bottom: 232px; }
+}
+
+/* the bag is laid out in fixed pixels, so it shrinks whole rather than reflow */
+@media (max-height: 560px) { #inventory-panel { transform: scale(0.78); } }
+@media (max-height: 440px) { #inventory-panel { transform: scale(0.64); } }
+
+body.touch #inspect-canvas {
+  width: 128px;
+  height: 128px;
+  right: auto;
+  left: 12px;
+  bottom: 92px;
+}
+body.touch #inspect-label {
+  right: auto;
+  left: 12px;
+  bottom: 58px;
+  width: 150px;
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: 0.1em;
+}
+
+/* short screens (a phone held sideways) can't spare the room */
+@media (max-height: 460px) {
+  .touch-btn { width: 54px; height: 54px; font-size: 11px; }
+  .touch-btn.big { width: 74px; height: 74px; font-size: 12px; }
+  .touch-btn.small { width: 40px; height: 40px; font-size: 8px; }
+  #touch-actions { gap: 7px; bottom: 12px; }
+  #touch-stick { top: calc(100% - 138px); left: 92px; }
+  body.touch #stats-bars { top: 96px; width: 132px; }
+  body.touch #objective { width: 140px; }
+
+  .landing { padding-top: 4vh; }
+  .landing-hero { min-height: 86vh; gap: 12px; }
+  .game-title { font-size: clamp(30px, 6vw, 60px); }
+  .menu-btn.big { font-size: 17px; padding: 12px 34px; }
+  .menu-screen .menu-btn { font-size: 16px; padding: 11px 32px; }
 }
 
 /* the white of the impact bleeds into the title card */

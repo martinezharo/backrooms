@@ -23,6 +23,7 @@ import { CHUNK } from './constants';
 import { HUD, ObjectiveView } from '../ui/HUD';
 import { InventoryUI } from '../ui/InventoryUI';
 import { Menus } from '../ui/Menus';
+import { TouchControls } from '../ui/TouchControls';
 import { Input } from './Input';
 import { loadRecords, noteDepth, noteEscape, noteRunStarted } from './Records';
 
@@ -55,6 +56,7 @@ export class Game {
   private hud = new HUD();
   private invUI: InventoryUI;
   private menus = new Menus();
+  private touch: TouchControls;
 
   private seed: number;
   private time = 0;
@@ -97,6 +99,7 @@ export class Game {
     this.scene.background = this.fogColor;
 
     this.input = new Input(canvas);
+    this.touch = new TouchControls(this.input);
     this.player = new Player(window.innerWidth / window.innerHeight);
     this.player.camera.add(this.audio.listener);
 
@@ -157,6 +160,7 @@ export class Game {
       this.state = 'dead';
       this.expectUnlock = true;
       this.input.exitPointerLock();
+      this.touch.setActive(false);
       this.invUI.setOpen(false);
       this.hud.setPrompt(null);
       this.menus.showGameOver(cause, this.survivalTime, this.fuseCount());
@@ -173,6 +177,13 @@ export class Game {
     this.player.onSplash = () => this.audio.playSfx('splash', 0.6);
 
     this.invUI.onDrop = (item) => this.dropItem(item);
+
+    this.hud.onSlotTap = (i) => {
+      const placed = this.inventory.items[i];
+      if (!placed) return;
+      this.inventory.equip(placed.item);
+      this.audio.playSfx('click', 0.35);
+    };
   }
 
   /** Scary noises are reserved for AI moments: stalking whispers and the
@@ -218,12 +229,16 @@ export class Game {
 
     this.hud.show(true);
     this.state = 'playing';
+    this.touch.goImmersive();
+    this.touch.setBagOpen(false);
+    this.touch.setActive(true);
     void this.input.requestPointerLock();
   }
 
   private pauseGame(): void {
     if (this.state !== 'playing') return;
     this.state = 'paused';
+    this.touch.setActive(false);
     this.menus.showPause(true);
     void this.audio.suspend();
   }
@@ -233,6 +248,7 @@ export class Game {
     this.menus.showPause(false);
     await this.audio.resume();
     this.state = 'playing';
+    this.touch.setActive(true);
     void this.input.requestPointerLock();
   }
 
@@ -285,6 +301,7 @@ export class Game {
     if (this.input.pressed('Tab') || this.input.pressed('KeyI')) {
       const open = this.invUI.toggle();
       this.expectUnlock = open;
+      this.touch.setBagOpen(open);
       if (open) this.input.exitPointerLock();
       else void this.input.requestPointerLock();
     }
@@ -608,6 +625,7 @@ export class Game {
     this.state = 'escaping';
     this.expectUnlock = true;
     this.input.exitPointerLock();
+    this.touch.setActive(false);
     this.invUI.setOpen(false);
     this.hud.setPrompt(null);
     this.hud.show(false);

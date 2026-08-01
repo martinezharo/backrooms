@@ -96,11 +96,18 @@ export class Player {
     if (input.down('KeyS')) fwd -= 1;
     if (input.down('KeyD')) strafe += 1;
     if (input.down('KeyA')) strafe -= 1;
+    // the on-screen stick is analog: a soft push walks slower than a full one
+    const stick = Math.hypot(input.moveX, input.moveY);
+    fwd += input.moveY;
+    strafe += input.moveX;
     const len = Math.hypot(fwd, strafe);
-    if (len > 0) { fwd /= len; strafe /= len; }
-    this.moving = len > 0;
+    // only normalise past full tilt, so partial stick keeps its magnitude
+    if (len > 1) { fwd /= len; strafe /= len; }
+    this.moving = len > 0.05;
 
-    this.running = input.down('ShiftLeft') && fwd > 0 && !this.crouching && !this.swimming && this.canRun;
+    // keys sprint on Shift; the stick sprints when you push it to the rim
+    const wantRun = input.down('ShiftLeft') || stick > 0.95;
+    this.running = wantRun && fwd > 0 && !this.crouching && !this.swimming && this.canRun;
     const speed = this.swimming ? SWIM_SPEED
       : this.crouching ? CROUCH_SPEED
         : this.running ? RUN_SPEED : WALK_SPEED;

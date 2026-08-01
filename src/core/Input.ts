@@ -1,8 +1,11 @@
-// Keyboard + mouse state with Pointer Lock handling.
+// Keyboard + mouse state with Pointer Lock handling, plus the virtual keys,
+// buttons and analog stick fed in by the on-screen touch controls.
 
 export class Input {
   private keys = new Set<string>();
   private pressedThisFrame = new Set<string>();
+  /** codes held down by an on-screen button rather than a real key */
+  private virtualKeys = new Set<string>();
   mouseDX = 0;
   mouseDY = 0;
   mouseDown = [false, false, false];
@@ -10,6 +13,11 @@ export class Input {
   /** accumulated wheel steps this frame: +1 per notch down, -1 per notch up */
   wheelDelta = 0;
   pointerLocked = false;
+  /** analog stick: x = strafe, y = forward, each in [-1, 1] */
+  moveX = 0;
+  moveY = 0;
+  /** on-screen controls are driving: never ask for pointer lock */
+  touchMode = false;
 
   /** Fired when the browser drops pointer lock (e.g. user pressed Esc). */
   onPointerLockLost: (() => void) | null = null;
@@ -61,7 +69,7 @@ export class Input {
   }
 
   async requestPointerLock(): Promise<void> {
-    if (this.pointerLocked) return;
+    if (this.pointerLocked || this.touchMode) return;
     try {
       await this.canvas.requestPointerLock();
     } catch {
@@ -74,12 +82,45 @@ export class Input {
   }
 
   down(code: string): boolean {
-    return this.keys.has(code);
+    return this.keys.has(code) || this.virtualKeys.has(code);
   }
 
   /** True only on the frame the key went down. */
   pressed(code: string): boolean {
     return this.pressedThisFrame.has(code);
+  }
+
+  // ------------------------------------------------ on-screen controls
+
+  /** An on-screen button standing in for a key. Taps shorter than a frame
+   *  still register, because the press edge is latched until endFrame. */
+  setVirtualKey(code: string, down: boolean): void {
+    if (down) {
+      if (!this.virtualKeys.has(code)) this.pressedThisFrame.add(code);
+      this.virtualKeys.add(code);
+    } else {
+      this.virtualKeys.delete(code);
+    }
+  }
+
+  /** An on-screen button standing in for a mouse button (0 attack, 2 block). */
+  setVirtualButton(button: number, down: boolean): void {
+    if (down && !this.mouseDown[button]) this.mousePressed[button] = true;
+    this.mouseDown[button] = down;
+  }
+
+  /** Look delta from a touch drag, in raw mouse-movement units. */
+  addLook(dx: number, dy: number): void {
+    this.mouseDX += dx;
+    this.mouseDY += dy;
+  }
+
+  /** Drop every virtual hold — used when the controls go away mid-press. */
+  releaseVirtual(): void {
+    this.virtualKeys.clear();
+    this.mouseDown = [false, false, false];
+    this.moveX = 0;
+    this.moveY = 0;
   }
 
   /** Call at the end of each frame. */

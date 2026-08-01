@@ -13,6 +13,9 @@ export interface ObjectiveView {
 }
 
 export class HUD {
+  /** tapping a hotbar slot equips it — the touch stand-in for the number keys */
+  onSlotTap: ((index: number) => void) | null = null;
+
   private root = document.getElementById('hud')!;
   private healthFill = document.getElementById('health-fill')!;
   private thirstFill = document.getElementById('thirst-fill')!;
@@ -113,7 +116,7 @@ export class HUD {
     if (sig === this.hotbarSig) return;
     this.hotbarSig = sig;
     this.hotbar.innerHTML = '';
-    for (const s of slots) {
+    for (const [i, s] of slots.entries()) {
       const el = document.createElement('div');
       el.className = 'hotbar-slot' + (s.equipped ? ' equipped' : '');
       const key = document.createElement('span');
@@ -129,6 +132,8 @@ export class HUD {
         drop.textContent = 'G⇣';
         el.appendChild(drop);
       }
+      // only reachable with touch controls on: the bar ignores the mouse
+      el.addEventListener('click', () => this.onSlotTap?.(i));
       this.hotbar.appendChild(el);
     }
   }
