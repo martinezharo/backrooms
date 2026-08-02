@@ -1,7 +1,7 @@
 // Tarkov-style grid overlay + rotating 3D inspect viewport.
 
 import * as THREE from 'three';
-import { INV_COLS, INV_ROWS, MAX_CARRY_WEIGHT } from '../core/constants';
+import { BOTTLE_CAPACITY, INV_COLS, INV_ROWS, MAX_CARRY_WEIGHT } from '../core/constants';
 import { buildItemMesh } from '../items/ItemMeshes';
 import { Inventory } from '../items/Inventory';
 import { ItemInstance } from '../items/Items';
@@ -89,7 +89,10 @@ export class InventoryUI {
       el.appendChild(icon);
 
       const label = document.createElement('div');
-      label.textContent = item.def.id === 'pistol' ? `${item.def.name} (${item.ammo})` : item.def.name;
+      label.textContent = item.def.id === 'pistol' ? `${item.def.name} (${item.ammo})`
+        : item.def.id === 'bottle'
+          ? `${item.def.name} (${item.water > 0 ? `${Math.round((item.water / BOTTLE_CAPACITY) * 100)}%` : 'EMPTY'})`
+          : item.def.name;
       el.appendChild(label);
 
       if (isFinite(item.def.durability) && item.def.durability > 1) {
@@ -196,7 +199,7 @@ export class InventoryUI {
       this.inspectScene.add(new THREE.AmbientLight(0x808a99, 1.2));
     }
 
-    this.inspectMesh = buildItemMesh(item.def.id);
+    this.inspectMesh = buildItemMesh(item.def.id, item.water / BOTTLE_CAPACITY);
     // normalise size so every item fills the viewport nicely
     const box = new THREE.Box3().setFromObject(this.inspectMesh);
     const size = box.getSize(new THREE.Vector3()).length();

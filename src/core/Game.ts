@@ -19,7 +19,9 @@ import { BiomeId, BIOMES, biomeForChunk } from '../world/Biomes';
 import { FUSE_COUNT, objectiveLayout } from '../world/Objective';
 import { PortalManager } from '../world/Portal';
 import { World } from '../world/World';
-import { CHUNK, RUN_SPEED } from './constants';
+import {
+  BATTERY_CHARGE, BOTTLE_CAPACITY, BOTTLE_DRINK_RATE, CHUNK, RUN_SPEED,
+} from './constants';
 import { HUD, ObjectiveView } from '../ui/HUD';
 import { InventoryUI } from '../ui/InventoryUI';
 import { Menus } from '../ui/Menus';
@@ -245,6 +247,16 @@ export class Game {
     this.stats.reset();
     this.survivalTime = 0;
     this.torchCharge = 100;
+
+    // You wake up already kitted: torch in hand (off — F is yours to press)
+    // and the receiver in the bag. Neither is worth a scavenger hunt, so
+    // neither spawns in the world.
+    this.inventory.clear();
+    this.inventory.add(makeItem('flashlight'));
+    this.inventory.add(makeItem('detector'));
+    this.lighting.setFlashlight(false);
+    this.combat.reset();
+
     this.vendingLeft.clear();
     this.receiverOnExit = false;
     noteRunStarted();
@@ -344,10 +356,7 @@ export class Game {
         this.torchCharge = 0;
         this.lighting.setFlashlight(false);
         this.audio.playSfx('click', 0.5);
-        // never spend a battery for you — but say plainly how to spend it
-        this.flashMessage(this.inventory.has('battery')
-          ? 'TORCH DEAD — PRESS F TO FIT A BATTERY'
-          : 'TORCH DEAD — FIND A BATTERY');
+        this.flashMessage('TORCH DEAD — FIND A BATTERY');
       }
     }
     // secret: hug the monster standing next to you
@@ -386,20 +395,29 @@ export class Game {
 
     const pickup = this.pickups.nearest(p.position, 2.1);
     if (pickup && !uiOpen && !atPortal) {
-      prompt = `E — TAKE ${pickup.item.def.name}`;
-      if (this.input.pressed('KeyE')) {
-        const verdict = this.inventory.canAdd(pickup.item);
-        if (verdict === 'ok') {
-          const taken = this.pickups.take(pickup);
-          this.inventory.add(taken);
-          this.audio.playSfx('pickup', 0.6);
-          // a battery picked up with a dead torch goes straight in — that is
-          // the only reason you bent down for it
-          if (taken.def.id === 'battery' && this.torchCharge <= 1 && this.fitBattery()) {
-            this.flashMessage('BATTERY IN — TORCH READY  [F]');
-          }
+      // Batteries are never carried: grabbing one empties it into the torch
+      // there and then. A full torch leaves it where it is, unspent.
+      const isBattery = pickup.item.def.id === 'battery';
+      const torchFull = this.torchCharge >= 99.5;
+      if (isBattery) {
+        prompt = torchFull ? 'BATTERY — TORCH IS ALREADY FULL' : `E — CHARGE THE TORCH (+${BATTERY_CHARGE}%)`;
+      } else {
+        prompt = `E — TAKE ${pickup.item.def.name}`;
+      }
+      if (this.input.pressed('KeyE') && !(isBattery && torchFull)) {
+        if (isBattery) {
+          this.pickups.take(pickup);
+          this.torchCharge = Math.min(100, this.torchCharge + BATTERY_CHARGE);
+          this.audio.playSfx('reload', 0.6);
+          this.flashMessage(`BATTERY DRAINED INTO THE TORCH — ${Math.round(this.torchCharge)}%`);
         } else {
-          this.flashMessage(`${verdict === 'weight' ? 'TOO HEAVY' : 'NO SPACE'} — TAB: BAG, DRAG AN ITEM OUT TO DROP`);
+          const verdict = this.inventory.canAdd(pickup.item);
+          if (verdict === 'ok') {
+            this.inventory.add(this.pickups.take(pickup));
+            this.audio.playSfx('pickup', 0.6);
+          } else {
+            this.flashMessage(`${verdict === 'weight' ? 'TOO HEAVY' : 'NO SPACE'} — TAB: BAG, DRAG AN ITEM OUT TO DROP`);
+          }
         }
       }
     }
@@ -421,12 +439,15 @@ export class Game {
       }
     }
 
-    // taps: crouch nearby to drink
+    // taps: crouch nearby to drink, or top the bottle up standing
+    const bottle = this.equippedBottle();
+    const canFill = !!bottle && bottle.water < BOTTLE_CAPACITY;
     const tap = this.nearestTap(1.5);
+    const atSource = !pickup && !vend && !atPortal && (!!tap || p.inWater);
     if (tap && !pickup && !vend && !atPortal) {
       if (p.crouching) {
         drinkingTap = true;
-        prompt = 'DRINKING…';
+        prompt = canFill ? 'DRINKING…  ·  E — FILL THE BOTTLE' : 'DRINKING…';
         p.drinkDip += (1 - p.drinkDip) * Math.min(1, dt * 5);
         this.gulpTimer -= dt;
         if (this.gulpTimer <= 0) {
@@ -434,10 +455,37 @@ export class Game {
           this.audio.playSfx('gulp', 0.5);
         }
       } else {
-        prompt = 'CROUCH (C) TO DRINK';
+        prompt = canFill ? 'E — FILL THE BOTTLE  ·  CROUCH (C) TO DRINK' : 'CROUCH (C) TO DRINK';
+      }
+    } else if (canFill && atSource) {
+      prompt = 'E — FILL THE BOTTLE';
+    }
+    if (canFill && atSource && this.input.pressed('KeyE')) this.fillBottle(bottle!);
+
+    // …and drink it back anywhere, holding right click
+    let drinkingBottle = false;
+    if (bottle && bottle.water > 0 && !uiOpen && this.input.mouseDown[2]) {
+      if (this.stats.thirst < 100) {
+        drinkingBottle = true;
+        const sip = Math.min(bottle.water, BOTTLE_DRINK_RATE * dt);
+        bottle.water -= sip;
+        this.stats.thirst = Math.min(100, this.stats.thirst + sip);
+        p.drinkDip += (1 - p.drinkDip) * Math.min(1, dt * 5);
+        this.gulpTimer -= dt;
+        if (this.gulpTimer <= 0) {
+          this.gulpTimer = 0.7;
+          this.audio.playSfx('gulp', 0.55);
+        }
+        if (bottle.water <= 0.01) {
+          bottle.water = 0;
+          this.flashMessage('BOTTLE EMPTY');
+        }
+        this.inventory.onChanged?.();
+      } else {
+        prompt = 'NOT THIRSTY';
       }
     }
-    if (!drinkingTap) p.drinkDip *= Math.max(0, 1 - dt * 6);
+    if (!drinkingTap && !drinkingBottle) p.drinkDip *= Math.max(0, 1 - dt * 6);
 
     // drop held item
     if (this.input.pressed('KeyG') && !uiOpen) {
@@ -547,10 +595,16 @@ export class Game {
     const eq = this.inventory.equipped;
     let detail = '';
     if (eq?.def.id === 'pistol') detail = `${eq.ammo} rds`;
-    else if (eq && isFinite(eq.def.durability)) detail = `${Math.max(0, Math.ceil((eq.durability / eq.def.durability) * 100))}%`;
+    else if (eq?.def.id === 'bottle') {
+      const sip = this.input.touchMode ? 'BLOCK' : 'RIGHT CLICK';
+      // the fill hint belongs to the tap/pool prompt, not to a permanent label
+      detail = eq.water > 0
+        ? `WATER ${Math.round((eq.water / BOTTLE_CAPACITY) * 100)}% · HOLD ${sip} TO DRINK`
+        : 'EMPTY';
+    } else if (eq && isFinite(eq.def.durability)) detail = `${Math.max(0, Math.ceil((eq.durability / eq.def.durability) * 100))}%`;
     const torch = !this.inventory.has('flashlight') ? ''
       : this.torchCharge <= 1
-        ? (this.inventory.has('battery') ? ' · TORCH DEAD — [F] BATTERY' : ' · TORCH DEAD')
+        ? ' · TORCH DEAD'
         : this.lighting.flashlightOn ? ' · TORCH ON' : ' · TORCH [F]';
     this.hud.setEquipped((eq ? `${eq.def.name} · DROP [G]` : 'FISTS') + torch, detail);
     this.hud.setHotbar(this.inventory.items.slice(0, 10).map((p, i) => ({
@@ -686,26 +740,25 @@ export class Game {
     );
   }
 
-  /** Spend one battery on the torch. False when there's nothing to spend. */
-  private fitBattery(): boolean {
-    const battery = this.inventory.has('battery');
-    if (!battery || !this.inventory.has('flashlight')) return false;
-    this.inventory.remove(battery);
-    this.torchCharge = 100;
-    this.audio.playSfx('reload', 0.6);
-    return true;
+  /** The bottle in your hand, if that's what you're holding. */
+  private equippedBottle(): ItemInstance | null {
+    const eq = this.inventory.equipped;
+    return eq?.def.id === 'bottle' ? eq : null;
   }
 
-  /** F: a flat torch takes a battery, otherwise it just switches. */
+  /** Bottles fill in one go — bending over a tap is the cost, not the wait. */
+  private fillBottle(bottle: ItemInstance): void {
+    bottle.water = BOTTLE_CAPACITY;
+    this.inventory.onChanged?.();
+    this.audio.playSfx('splash', 0.35);
+    this.flashMessage('BOTTLE FULL — HOLD RIGHT CLICK TO DRINK');
+  }
+
+  /** F: switch the torch. A flat one needs a battery off the floor. */
   private toggleTorch(): void {
     if (this.torchCharge <= 1) {
-      if (!this.fitBattery()) {
-        this.flashMessage('TORCH IS DEAD — NO BATTERY');
-        this.lighting.setFlashlight(false);
-        return;
-      }
-      this.lighting.setFlashlight(true);
-      this.flashMessage('BATTERY IN');
+      this.flashMessage('TORCH IS DEAD — FIND A BATTERY');
+      this.lighting.setFlashlight(false);
       return;
     }
     this.lighting.setFlashlight(!this.lighting.flashlightOn);

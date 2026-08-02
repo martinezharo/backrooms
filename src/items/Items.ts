@@ -33,7 +33,7 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'bottle', name: 'GLASS BOTTLE',
     weight: 1, gridW: 1, gridH: 1, kind: 'throwable',
     damage: 16, cooldown: 0.5, durability: 1, range: 18,
-    description: 'One throw. Make it count.',
+    description: 'Carries water. Right click drinks, E fills it. Still throws.',
   },
   knife: {
     id: 'knife', name: 'KITCHEN KNIFE',
@@ -75,7 +75,7 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'battery', name: 'BATTERY',
     weight: 1, gridW: 1, gridH: 1, kind: 'tool',
     damage: 0, cooldown: 0, durability: Infinity, range: 0,
-    description: 'Torch juice. Press F on a dead torch to swap it in.',
+    description: 'Torch juice. Grabbing one tops the torch up on the spot.',
   },
   ammo: {
     id: 'ammo', name: '9MM BOX',
@@ -92,9 +92,11 @@ export interface ItemInstance {
   durability: number;
   /** rounds loaded (pistol only) */
   ammo: number;
+  /** thirst points held in it (bottle only), 0..BOTTLE_CAPACITY */
+  water: number;
 }
 
-export function makeItem(id: string): ItemInstance {
+export function makeItem(id: string, water = 0): ItemInstance {
   const def = ITEMS[id];
-  return { def, durability: def.durability, ammo: 0 };
+  return { def, durability: def.durability, ammo: 0, water };
 }

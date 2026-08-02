@@ -7,7 +7,7 @@
 // coordinates, so both neighbouring chunks compute identical border walls/doors.
 
 import * as THREE from 'three';
-import { CELLS, CELL, CHUNK, WALL_THICKNESS } from '../core/constants';
+import { BOTTLE_CAPACITY, CELLS, CELL, CHUNK, WALL_THICKNESS } from '../core/constants';
 import { chunkRng, hash3, mulberry32, randInt, Rng } from '../core/rng';
 import { GRAFFITI_COUNT } from '../rendering/Textures';
 import { BiomeId, BIOMES, biomeForChunk } from './Biomes';
@@ -33,7 +33,11 @@ export interface GraffitiSpot {
   size: number;
 }
 export interface TableSpot { x: number; z: number; }
-export interface ItemSpawn { id: string; itemId: string; x: number; y: number; z: number; }
+export interface ItemSpawn {
+  id: string; itemId: string; x: number; y: number; z: number;
+  /** bottles only: thirst points already in it when found */
+  water?: number;
+}
 /** Plinth holding one of the three fuses. */
 export interface PedestalSpot { x: number; y: number; z: number; }
 /** Almond water machine — crouch-free instant drink, a few servings only. */
@@ -259,13 +263,13 @@ function fixConnectivity(c: ChunkData, seedCells: number[]) {
   }
 }
 
+// No torches: you start the run holding one, so finding more would be noise.
 const ITEM_TABLE: { id: string; w: number }[] = [
   { id: 'knife', w: 0.14 },
   { id: 'pipe', w: 0.14 },
-  { id: 'bottle', w: 0.14 },
+  { id: 'bottle', w: 0.22 },
   { id: 'wrench', w: 0.1 },
   { id: 'extinguisher', w: 0.07 },
-  { id: 'flashlight', w: 0.08 },
   { id: 'pistol', w: 0.04 },
   { id: 'ammo', w: 0.14 },
   { id: 'battery', w: 0.15 },
@@ -602,6 +606,10 @@ export function generateChunk(seed: number, cx: number, cz: number): ChunkData {
   }
 
   // ---- item spawns ----
+  /** Roughly two in five bottles were left with something still in them. */
+  const bottleWater = (itemId: string) =>
+    itemId === 'bottle' ? (rng() < 0.4 ? BOTTLE_CAPACITY : 0) : undefined;
+
   const spawnItem = (itemId: string, near?: { i: number; j: number }) => {
     for (let tries = 0; tries < 24; tries++) {
       const i = near ? Math.min(N - 1, Math.max(0, near.i + randInt(rng, -2, 3))) : randInt(rng, 0, N);
@@ -615,6 +623,7 @@ export function generateChunk(seed: number, cx: number, cz: number): ChunkData {
         x: x + (rng() - 0.5) * 0.8,
         y: c.floor[k] + 0.16,
         z: z + (rng() - 0.5) * 0.8,
+        water: bottleWater(itemId),
       });
       return;
     }
@@ -631,11 +640,11 @@ export function generateChunk(seed: number, cx: number, cz: number): ChunkData {
   }
 
   if (cx === 0 && cz === 0) {
-    // Guaranteed early-game kit near spawn.
-    spawnItem('flashlight', { i: 8, j: 8 });
+    // Torch and receiver are already in your hands; this is the rest of the kit.
+    // No battery here: the torch starts full, so one at your feet was free
+    // charge every single run.
     spawnItem('knife', { i: 8, j: 8 });
-    spawnItem('detector', { i: 8, j: 8 });
-    spawnItem('battery', { i: 8, j: 8 });
+    spawnItem('bottle', { i: 8, j: 8 });
   } else {
     if (rng() < 0.38) spawnItem(rollItem(rng));
     if (rng() < 0.1) spawnItem(rollItem(rng));
@@ -643,10 +652,12 @@ export function generateChunk(seed: number, cx: number, cz: number): ChunkData {
   // table gets a bonus item on top
   if (c.tables.length && rng() < 0.6) {
     const t = c.tables[0];
+    const itemId = rollItem(rng);
     c.itemSpawns.push({
       id: `${cx},${cz},${c.itemSpawns.length}`,
-      itemId: rollItem(rng),
+      itemId,
       x: t.x, y: 0.86, z: t.z,
+      water: bottleWater(itemId),
     });
   }
 

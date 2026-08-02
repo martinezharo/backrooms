@@ -2,7 +2,9 @@
 // pistol hitscan. Owns the first-person viewmodel.
 
 import * as THREE from 'three';
-import { BLOCK_MULT, PUNCH_COOLDOWN, PUNCH_DAMAGE, PUNCH_RANGE } from '../core/constants';
+import {
+  BLOCK_MULT, BOTTLE_CAPACITY, PUNCH_COOLDOWN, PUNCH_DAMAGE, PUNCH_RANGE,
+} from '../core/constants';
 import { Input } from '../core/Input';
 import { Enemy } from '../enemies/Enemy';
 import { buildItemMesh } from '../items/ItemMeshes';
@@ -13,7 +15,7 @@ import { Player } from './Player';
 
 export type CombatSound =
   | 'swing' | 'hit' | 'punch' | 'gunshot' | 'click' | 'throw'
-  | 'glassBreak' | 'itemBreak' | 'spray' | 'sprayStop' | 'reload';
+  | 'glassBreak' | 'splash' | 'itemBreak' | 'spray' | 'sprayStop' | 'reload';
 
 interface Projectile {
   mesh: THREE.Group;
@@ -34,6 +36,7 @@ export class Combat {
   private inventory: Inventory;
   private viewmodel = new THREE.Group();
   private viewmodelItem: ItemInstance | null | undefined = undefined; // undefined = force rebuild
+  private viewmodelFill = 0;
   private fist: THREE.Mesh;
   private cooldown = 0;
   private swingAnim = 0;
@@ -182,7 +185,7 @@ export class Combat {
     this.cooldown = item.def.cooldown;
     const dir = new THREE.Vector3();
     player.camera.getWorldDirection(dir);
-    const mesh = buildItemMesh(item.def.id);
+    const mesh = buildItemMesh(item.def.id, item.water / BOTTLE_CAPACITY);
     mesh.position.copy(player.camera.position).add(dir.clone().multiplyScalar(0.5));
     this.scene.add(mesh);
     this.projectiles.push({
@@ -336,6 +339,8 @@ export class Combat {
 
       if (smashed) {
         this.onSound?.('glassBreak');
+        // a full one bursts as well as breaks
+        if (p.item.water > 0) this.onSound?.('splash');
         this.scene.remove(p.mesh);
         p.mesh.traverse((o) => { if (o instanceof THREE.Mesh) o.geometry.dispose(); });
         this.projectiles.splice(i, 1);
@@ -359,14 +364,18 @@ export class Combat {
   }
 
   private refreshViewmodel(eq: ItemInstance | null): void {
-    if (this.viewmodelItem === eq) return;
+    // A bottle draining in your hand redraws too, but only in steps: rebuilding
+    // the model on every frame of a gulp is a lot of geometry for no gain.
+    const fill = eq ? Math.round((eq.water / BOTTLE_CAPACITY) * 16) / 16 : 0;
+    if (this.viewmodelItem === eq && this.viewmodelFill === fill) return;
     this.viewmodelItem = eq;
+    this.viewmodelFill = fill;
     this.viewmodel.clear();
     if (!eq) {
       this.viewmodel.add(this.fist);
       return;
     }
-    const m = buildItemMesh(eq.def.id);
+    const m = buildItemMesh(eq.def.id, fill);
     m.rotation.y = Math.PI * 0.45;
     if (eq.def.id === 'pistol') {
       m.rotation.y = Math.PI * 0.5;

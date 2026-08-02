@@ -97,17 +97,24 @@ the danger.
   can't run anymore, and your health starts draining at an accelerating rate.
 - Drink by **crouching at wall taps** (Levels 0/2) or by **submerging** in
   pool water (much faster).
+- **Glass bottles double as canteens.** Some are found full, some empty. Hold a
+  bottle and press `E` at a tap or standing in water to fill it, then hold RMB
+  anywhere to drink it back. It still throws just as well when empty.
 - Health regenerates slowly while you stay hydrated (> 60%).
 
 ## Items & combat
 
-Weapons spawn on the floor and on tables (glowing ring): pipe wrench, metal
-pipe, kitchen knife, glass bottle (throwable), fire extinguisher (stun cloud),
-pistol (if you find ammo), torch. Each has damage, speed, durability and
-weight. The torch burns through a **battery** in about five minutes; picking one
-up with a flat torch fits it straight away, and `F` fits a spare when the beam
-dies on you. **Almond water machines** in Levels 0 and 2 refill your thirst
-instantly, three servings each. Grid inventory (Tarkov-style), 10 weight units max, one item in hand.
+You start every run already holding the **torch** (lit, `F` toggles it) and the
+**field receiver** — neither spawns in the world. Everything else is scavenged
+from the floor and from tables (glowing ring): pipe wrench, metal pipe, kitchen
+knife, glass bottle (throwable canteen), fire extinguisher (stun cloud), pistol
+(if you find ammo). Each has damage, speed, durability and weight.
+
+The torch burns through its charge in about five minutes. **Batteries** are
+never carried: walk over one and `E` pours it straight into the torch (+55%),
+and a full torch leaves it on the floor for later. **Almond water machines** in
+Levels 0 and 2 refill your thirst instantly, three servings each. Grid inventory
+(Tarkov-style), 10 weight units max, one item in hand.
 
 A **hotbar** keeps everything reachable without opening the bag: number keys
 equip directly, the mouse wheel cycles items, G drops what you're holding.
@@ -122,14 +129,14 @@ item out of the panel to drop it.
 | Shift | Sprint (drains thirst fast — impossible at 0 thirst) |
 | Space | Jump · swim up (swim against a pool edge to climb out) |
 | C / Ctrl | Crouch · drink at taps · swim down |
-| E | Pick up / interact |
+| E | Pick up / interact / fill the held bottle at water |
 | LMB | Attack (fists if unarmed) |
-| RMB | Block (melee) / aim (pistol) |
+| RMB | Block (melee) / aim (pistol) / drink from the held bottle |
 | 1–9 / 0 | Quick-equip hotbar item (same key again puts it away) |
 | Mouse wheel | Cycle items → empty hands |
 | G | Drop held item |
 | TAB / I | Inventory |
-| F | Torch (swaps in a battery when it's dead) |
+| F | Torch on/off (recharge it by grabbing batteries) |
 | R | Point the receiver at the fuses / at the exit |
 | Esc | Pause |
 

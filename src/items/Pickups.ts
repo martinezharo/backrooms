@@ -2,7 +2,7 @@
 // E to pick up, G drops the equipped item back into the world.
 
 import * as THREE from 'three';
-import { CHUNK } from '../core/constants';
+import { BOTTLE_CAPACITY, CHUNK } from '../core/constants';
 import { World } from '../world/World';
 import { ChunkData } from '../world/Chunk';
 import { buildItemMesh } from './ItemMeshes';
@@ -53,7 +53,7 @@ export class Pickups {
   private chunkLoaded(c: ChunkData): void {
     for (const s of c.itemSpawns) {
       if (this.consumed.has(s.id)) continue;
-      this.place(makeItem(s.itemId), s.x, s.y, s.z, s.id);
+      this.place(makeItem(s.itemId, s.water ?? 0), s.x, s.y, s.z, s.id);
     }
     const key = `${c.cx},${c.cz}`;
     const drops = this.droppedByChunk.get(key);
@@ -79,7 +79,7 @@ export class Pickups {
   }
 
   private place(item: ItemInstance, x: number, y: number, z: number, spawnId: string | null): void {
-    const mesh = buildItemMesh(item.def.id);
+    const mesh = buildItemMesh(item.def.id, item.water / BOTTLE_CAPACITY);
     mesh.position.set(x, y, z);
     mesh.rotation.y = Math.random() * Math.PI * 2;
     const glow = makeGlow();

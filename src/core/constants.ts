@@ -27,6 +27,14 @@ export const POOL_DRINK_RATE = 18;       // points/s while submerged
 export const HEALTH_REGEN = 1.2;         // points/s when thirst > 60
 export const DEHYDRATION_BASE = 0.6;     // health drain at thirst 0, accelerates
 
+// Bottles double as canteens
+export const BOTTLE_CAPACITY = 45;       // thirst points one full bottle holds
+export const BOTTLE_DRINK_RATE = 26;     // points/s while drinking from a bottle
+export const BOTTLE_FILL_RATE = 40;      // points/s poured in at a tap or in water
+
+// Torch
+export const BATTERY_CHARGE = 55;        // torch % a scavenged cell puts back
+
 // Combat
 export const PUNCH_DAMAGE = 5;
 export const PUNCH_COOLDOWN = 0.8;
