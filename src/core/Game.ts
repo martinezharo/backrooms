@@ -262,7 +262,10 @@ export class Game {
   private loop(): void {
     requestAnimationFrame(() => this.loop());
     const now = performance.now();
-    const dt = Math.min(0.05, (now - this.lastFrame) / 1000);
+    // simulation dt is clamped so a stall can't teleport anything; the FPS
+    // counter needs the real frame time, or it just reports 1/clamp
+    const frameSeconds = (now - this.lastFrame) / 1000;
+    const dt = Math.min(0.05, frameSeconds);
     this.lastFrame = now;
 
     if (this.state === 'playing') {
@@ -283,11 +286,11 @@ export class Game {
 
     if (this.state === 'escaping' || this.state === 'escaped') {
       this.escape.render(this.renderer);
-      this.hud.tickFps(dt);
+      this.hud.tickFps(frameSeconds);
     } else if (this.state !== 'menu') {
       this.postfx.update(this.time, dt);
       this.postfx.render();
-      this.hud.tickFps(dt);
+      this.hud.tickFps(frameSeconds);
     }
     this.input.endFrame();
   }

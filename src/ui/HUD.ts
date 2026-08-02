@@ -40,9 +40,8 @@ export class HUD {
 
   private biomeShown = '';
   private biomeTimer: number | null = null;
-  private fpsAcc = 0;
   private fpsFrames = 0;
-  private fpsTime = 0;
+  private fpsElapsed = 0;
 
   show(visible: boolean): void {
     this.root.classList.toggle('hidden', !visible);
@@ -180,16 +179,23 @@ export class HUD {
     this.biomeTimer = window.setTimeout(() => this.biome.classList.remove('visible'), 4500);
   }
 
-  tickFps(dt: number): void {
-    this.fpsAcc += dt;
-    this.fpsFrames++;
-    this.fpsTime += dt;
-    if (this.fpsTime > 0.5) {
-      const fps = Math.round(this.fpsFrames / this.fpsAcc);
-      this.fps.textContent = `${fps} FPS`;
-      this.fpsAcc = 0;
+  /**
+   * Averaged over half a second of wall clock — feed it the real frame time,
+   * not the simulation's clamped dt, or this only ever reports 1/clamp.
+   */
+  tickFps(frameSeconds: number): void {
+    // a backgrounded tab produces one enormous frame; it says nothing about
+    // how fast the game runs, so throw the whole window away
+    if (frameSeconds > 1) {
       this.fpsFrames = 0;
-      this.fpsTime = 0;
+      this.fpsElapsed = 0;
+      return;
     }
+    this.fpsFrames++;
+    this.fpsElapsed += frameSeconds;
+    if (this.fpsElapsed < 0.5) return;
+    this.fps.textContent = `${Math.round(this.fpsFrames / this.fpsElapsed)} FPS`;
+    this.fpsFrames = 0;
+    this.fpsElapsed = 0;
   }
 }
