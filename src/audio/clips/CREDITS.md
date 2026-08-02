@@ -19,6 +19,29 @@ distance, head-shadow, orbit and reverb are applied at runtime by
 | `drag_scrape.mp3` | [Scrapes](https://opengameart.org/content/scrapes) | OpenGameArt | `scrape-3.ogg`, full |
 | `ear_whisper.mp3` | ["I see you" Voice](https://opengameart.org/content/i-see-you-voice) | OpenGameArt | `i_see_you_voice_0.mp3`, 0.25–4.10 s |
 
+## Breaking glass
+
+`scripts/glass.mjs` fetches both sources, cuts and levels the three takes and
+encodes them, so re-running it reproduces the files here. The engine picks one
+at random per smash — a thrown bottle is heard often enough that a single buffer
+replayed starts sounding like a sample.
+
+Synthesis was tried first and dropped: shattering glass is hundreds of
+inharmonic events inside the first 30 ms, and any additive approximation of that
+comes out as a chord.
+
+The takes are chosen on **weight**, not on how glassy they look: a bottle hitting
+a floor puts real low-mid energy into the first 40 ms and then keeps shedding
+debris, while a take that is all top end reads as coins being dropped. The three
+here measure 0.91, 0.82 and 0.51 of low/(low+high) energy at the transient; the
+bright tinkles that were rejected sit at 0.02–0.19.
+
+| clip | source | author | take |
+| --- | --- | --- | --- |
+| `glass_break_1.mp3` | [Glass Break](https://opengameart.org/content/glass-break) | TinyWorlds (OpenGameArt) | `glass_breaking.wav` |
+| `glass_break_2.mp3` | [100 CC0 SFX #2](https://opengameart.org/content/100-cc0-sfx-2) | rubberduck (OpenGameArt) | `sfx100v2_glass_02.ogg` |
+| `glass_break_3.mp3` | [100 CC0 SFX #2](https://opengameart.org/content/100-cc0-sfx-2) | rubberduck (OpenGameArt) | `sfx100v2_glass_06.ogg` |
+
 ## Footsteps and water (`steps/`)
 
 Also CC0. These are not hand-edited: `scripts/footsteps.mjs` fetches the packs

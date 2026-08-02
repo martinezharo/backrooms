@@ -14,6 +14,9 @@ import dragScrapeUrl from './clips/drag_scrape.mp3?url';
 import earWhisperUrl from './clips/ear_whisper.mp3?url';
 import farBangUrl from './clips/far_bang.mp3?url';
 import farScreamUrl from './clips/far_scream.mp3?url';
+import glassBreak1 from './clips/glass_break_1.mp3?url';
+import glassBreak2 from './clips/glass_break_2.mp3?url';
+import glassBreak3 from './clips/glass_break_3.mp3?url';
 import metalFallUrl from './clips/metal_fall.mp3?url';
 import stepCarpetL1 from './clips/steps/step_carpet_l1.mp3?url';
 import stepCarpetL2 from './clips/steps/step_carpet_l2.mp3?url';
@@ -48,6 +51,16 @@ const STEP_CLIPS: Record<Surface, { l: string[]; r: string[] }> = {
 };
 
 const WATER_IMPACTS = [waterImpact1, waterImpact2, waterImpact3];
+
+/**
+ * Recorded one-shots that stand in for a synthesized name. Shattering glass is
+ * hundreds of inharmonic events inside the first 30 ms; synthesis of that only
+ * ever produced a chord, so the bottle gets three real takes and picks one per
+ * smash. See clips/CREDITS.md and scripts/glass.mjs.
+ */
+const SFX_CLIPS: Record<string, string[]> = {
+  glassBreak: [glassBreak1, glassBreak2, glassBreak3],
+};
 
 /** how loud each surface sits, after the clips were levelled against each other */
 const STEP_GAIN: Record<Surface, number> = { carpet: 0.34, hard: 0.38 };
@@ -146,6 +159,8 @@ export class AudioEngine {
   private dread = 0;
   private sprayNode: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
   private stepOnsets = new Map<string, number>();
+  /** logical sfx name -> clip urls that actually decoded */
+  private sfxVariants = new Map<string, string[]>();
   private stepVariant = 0;
   private stepLeft = false;
   private wadeNode: { src: AudioBufferSourceNode; gain: GainNode; filter: BiquadFilterNode } | null = null;
@@ -216,6 +231,7 @@ export class AudioEngine {
     this.synthesizeSfx();
     void this.loadHauntClips();
     void this.loadStepClips();
+    void this.loadSfxClips();
   }
 
   /**
@@ -247,6 +263,28 @@ export class AudioEngine {
         }
       }),
     );
+  }
+
+  /**
+   * Recorded stand-ins for synthesized one-shots. Only the takes that decode
+   * get registered, so a clip that never arrived falls back to whatever is
+   * synthesized under the same name rather than going silent.
+   */
+  private async loadSfxClips(): Promise<void> {
+    await Promise.all(Object.entries(SFX_CLIPS).map(async ([name, urls]) => {
+      const loaded: string[] = [];
+      await Promise.all(urls.map(async (url) => {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) return;
+          this.buffers.set(url, await this.ctx.decodeAudioData(await res.arrayBuffer()));
+          loaded.push(url);
+        } catch {
+          // one missing take just means less variety
+        }
+      }));
+      if (loaded.length) this.sfxVariants.set(name, loaded);
+    }));
   }
 
   /**
@@ -343,16 +381,10 @@ export class AudioEngine {
       lowpass(d, 0.5);
     }));
     B.set('throw', B.get('swing')!);
-    B.set('glassBreak', makeBuffer(ctx, 0.6, (d, sr) => {
-      for (let i = 0; i < d.length; i++) {
-        const t = i / sr;
-        let v = 0;
-        for (const f of [2310, 3170, 4730, 6390]) {
-          v += Math.sin(2 * Math.PI * f * t + Math.sin(t * 80) * 4);
-        }
-        d[i] = (v * 0.18 + (Math.random() - 0.5) * 0.7) * envExp(i, sr, 12);
-      }
-    }));
+    // 'glassBreak' is not synthesized: it is three recordings (SFX_CLIPS).
+    // Every attempt at synthesizing it landed on a chord, because shattering
+    // glass is hundreds of inharmonic events in the first 30 ms and additive
+    // synthesis at that scale just rings.
     B.set('itemBreak', makeBuffer(ctx, 0.45, (d, sr) => {
       for (let i = 0; i < d.length; i++) {
         const t = i / sr;
@@ -494,7 +526,11 @@ export class AudioEngine {
 
   playSfx(name: string, volume = 1, rateJitter = 0.08): void {
     this.prepareSfx();
-    const buf = this.buffers.get(name);
+    // a name backed by recordings plays a different take each time
+    const takes = this.sfxVariants.get(name);
+    const buf = this.buffers.get(
+      takes ? takes[Math.floor(Math.random() * takes.length)] : name,
+    );
     if (!buf || this.ctx.state !== 'running') return;
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
