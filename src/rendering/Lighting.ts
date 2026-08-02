@@ -107,15 +107,17 @@ export class Lighting {
     return false;
   }
 
-  update(camera: THREE.PerspectiveCamera, time: number): void {
+  update(camera: THREE.PerspectiveCamera, time: number, dt: number): void {
     const px = camera.position.x;
     const pz = camera.position.z;
 
-    // ambient follows the player's biome (lerped)
+    // ambient follows the player's biome — eased over ~1s of wall clock, not
+    // of frames, so a slow machine crosses a biome border at the same pace
     const biome = this.world.biomeAt(px, pz);
+    const ease = Math.min(1, dt * 2.4);
     _ambientColor.setHex(biome.ambientColor);
-    this.ambient.color.lerp(_ambientColor, 0.04);
-    this.ambient.intensity += (biome.ambientIntensity - this.ambient.intensity) * 0.04;
+    this.ambient.color.lerp(_ambientColor, ease);
+    this.ambient.intensity += (biome.ambientIntensity - this.ambient.intensity) * ease;
 
     // nearest fixtures get the real lights
     this.near.length = 0;

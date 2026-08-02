@@ -292,7 +292,7 @@ export class Game {
     } else if (this.state === 'dead') {
       this.time += dt;
       // world keeps breathing behind the death screen
-      this.lighting.update(this.player.camera, this.time);
+      this.lighting.update(this.player.camera, this.time, dt);
       updateWater(this.time);
     } else if (this.state === 'escaping') {
       this.time += dt;
@@ -491,7 +491,7 @@ export class Game {
     this.lighting.setThreat(1 - (nearestEnemy - 1) / 13);
     this.lighting.setSubjectDistance(nearestSubject);
 
-    this.lighting.update(p.camera, this.time);
+    this.lighting.update(p.camera, this.time, dt);
     updateWater(this.time);
     this.pickups.update(this.time);
     this.portals.update(this.time, dt);
