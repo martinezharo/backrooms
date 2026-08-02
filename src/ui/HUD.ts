@@ -37,6 +37,13 @@ export class HUD {
   private friendSpeechTimer: number | null = null;
   private hotbarSig = '';
   private pipCount = -1;
+  private lastHealth = -Infinity;
+  private lastThirst = -Infinity;
+  private lastTorch = -Infinity;
+  private lastPrompt: string | null = null;
+  private lastEquipped = '';
+  private lastDamage = -Infinity;
+  private objectiveVisible = false;
 
   private biomeShown = '';
   private biomeTimer: number | null = null;
@@ -48,19 +55,37 @@ export class HUD {
   }
 
   setBars(health: number, thirst: number): void {
-    (this.healthFill as HTMLElement).style.width = `${Math.max(0, health)}%`;
-    (this.thirstFill as HTMLElement).style.width = `${Math.max(0, thirst)}%`;
-    this.healthFill.classList.toggle('critical', health < 25);
-    this.thirstFill.classList.toggle('critical', thirst < 20);
+    if (Math.abs(health - this.lastHealth) >= 0.25) {
+      this.lastHealth = health;
+      (this.healthFill as HTMLElement).style.width = `${Math.max(0, health)}%`;
+    }
+    if (Math.abs(thirst - this.lastThirst) >= 0.25) {
+      this.lastThirst = thirst;
+      (this.thirstFill as HTMLElement).style.width = `${Math.max(0, thirst)}%`;
+    }
+    const healthCritical = health < 25;
+    const thirstCritical = thirst < 20;
+    if (this.healthFill.classList.contains('critical') !== healthCritical) {
+      this.healthFill.classList.toggle('critical', healthCritical);
+    }
+    if (this.thirstFill.classList.contains('critical') !== thirstCritical) {
+      this.thirstFill.classList.toggle('critical', thirstCritical);
+    }
   }
 
   /** The run objective: fuse pips, plus a bearing arrow while you carry the receiver. */
   setObjective(o: ObjectiveView | null): void {
     if (!o) {
-      this.objective.classList.add('hidden');
+      if (this.objectiveVisible) {
+        this.objective.classList.add('hidden');
+        this.objectiveVisible = false;
+      }
       return;
     }
-    this.objective.classList.remove('hidden');
+    if (!this.objectiveVisible) {
+      this.objective.classList.remove('hidden');
+      this.objectiveVisible = true;
+    }
     this.objective.classList.toggle('ready', o.ready);
     this.objective.classList.toggle('no-signal', o.bearing === null);
     if (this.objTitle.textContent !== o.title) this.objTitle.textContent = o.title;
@@ -81,20 +106,32 @@ export class HUD {
     if (o.bearing !== null) {
       (this.objArrow as HTMLElement).style.transform = `rotate(${(o.bearing * 180) / Math.PI}deg)`;
     }
-    this.objDist.textContent = o.bearing === null
+    const distanceText = o.bearing === null
       ? 'NO RECEIVER'
       : o.distance === null ? 'SIGNAL LOST' : `${Math.round(o.distance / 10) * 10} M`;
+    if (this.objDist.textContent !== distanceText) this.objDist.textContent = distanceText;
   }
 
   /** Torch charge bar; hidden entirely when you have no torch. */
   setTorch(charge: number | null): void {
-    this.torchRow.classList.toggle('hidden', charge === null);
+    const hidden = charge === null;
+    if (this.torchRow.classList.contains('hidden') !== hidden) {
+      this.torchRow.classList.toggle('hidden', hidden);
+    }
     if (charge === null) return;
-    (this.torchFill as HTMLElement).style.width = `${Math.max(0, charge)}%`;
-    this.torchFill.classList.toggle('critical', charge < 20);
+    if (Math.abs(charge - this.lastTorch) >= 0.25) {
+      this.lastTorch = charge;
+      (this.torchFill as HTMLElement).style.width = `${Math.max(0, charge)}%`;
+    }
+    const critical = charge < 20;
+    if (this.torchFill.classList.contains('critical') !== critical) {
+      this.torchFill.classList.toggle('critical', critical);
+    }
   }
 
   setPrompt(text: string | null): void {
+    if (text === this.lastPrompt) return;
+    this.lastPrompt = text;
     if (text) {
       this.prompt.textContent = text;
       this.prompt.classList.remove('hidden');
@@ -104,9 +141,12 @@ export class HUD {
   }
 
   setEquipped(name: string | null, detail = ''): void {
-    this.equipped.innerHTML = name
+    const content = name
       ? `${name}${detail ? `<br><span style="opacity:.6">${detail}</span>` : ''}`
       : '';
+    if (content === this.lastEquipped) return;
+    this.lastEquipped = content;
+    this.equipped.innerHTML = content;
   }
 
   /** Always-visible quick bar; only rebuilds the DOM when contents change. */
@@ -167,7 +207,12 @@ export class HUD {
   }
 
   setDamageOverlay(strength: number): void {
-    (this.damageVignette as HTMLElement).style.opacity = String(Math.min(1, strength));
+    const value = Math.min(1, strength);
+    // 0 must always be written, or the vignette settles at a residual opacity.
+    if (value !== 0 && Math.abs(value - this.lastDamage) < 0.01) return;
+    if (value === this.lastDamage) return;
+    this.lastDamage = value;
+    (this.damageVignette as HTMLElement).style.opacity = String(value);
   }
 
   announceBiome(name: string): void {

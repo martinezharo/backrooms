@@ -26,6 +26,7 @@ import { Menus } from '../ui/Menus';
 import { TouchControls } from '../ui/TouchControls';
 import { Input } from './Input';
 import { loadRecords, noteDepth, noteEscape, noteRunStarted } from './Records';
+import { getRenderQuality } from '../rendering/Quality';
 
 type GameState = 'menu' | 'playing' | 'paused' | 'dead' | 'escaping' | 'escaped';
 
@@ -40,6 +41,7 @@ const VENDING_SERVINGS = 3;
 export class Game {
   private state: GameState = 'menu';
   private renderer: THREE.WebGLRenderer;
+  private quality = getRenderQuality();
   private scene = new THREE.Scene();
   private input: Input;
   private world: World;
@@ -82,15 +84,21 @@ export class Game {
   private receiverOnExit = false;
   private pingTimer = 0;
   private depthTimer = 0;
+  private readonly viewDirection = new THREE.Vector3();
+  private readonly enemyOffset = new THREE.Vector3();
 
   constructor(seed: number) {
     this.seed = seed;
     const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    this.renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: this.quality.antialias,
+      powerPreference: 'high-performance',
+    });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(1.75, window.devicePixelRatio));
+    this.renderer.setPixelRatio(this.quality.pixelRatio);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = this.quality.mobile ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
 
@@ -106,10 +114,10 @@ export class Game {
     this.world = new World(seed, this.scene);
     this.pickups = new Pickups(this.scene, this.world);
     this.portals = new PortalManager(this.scene, this.world, seed);
-    this.lighting = new Lighting(this.scene, this.world);
+    this.lighting = new Lighting(this.scene, this.world, this.quality);
     this.combat = new Combat(this.scene, this.player, this.inventory);
     this.spawner = new Spawner(this.scene, this.world);
-    this.postfx = new PostFX(this.renderer, this.scene, this.player.camera);
+    this.postfx = new PostFX(this.renderer, this.scene, this.player.camera, this.quality);
     this.music = new Music(this.audio);
     this.invUI = new InventoryUI(this.inventory);
 
@@ -128,6 +136,11 @@ export class Game {
     this.menus.showRecords(loadRecords());
     this.menus.showStart();
     requestAnimationFrame(() => this.loop());
+  }
+
+  /** Called by the small landing-page bootstrap after the game chunk loads. */
+  public async start(): Promise<void> {
+    await this.startGame();
   }
 
   // ------------------------------------------------------------ wiring
@@ -218,6 +231,9 @@ export class Game {
     await this.audio.resume();
     this.music.start();
 
+    // Build the whole visible radius up front. Streaming it in afterwards only
+    // moves the cost into the first seconds of play, where it shows up as
+    // stutter and geometry popping in inside the view distance.
     this.world.preload(SPAWN_X, SPAWN_Z);
     this.player.reset(SPAWN_X, SPAWN_Z);
     this.stats.reset();
@@ -229,6 +245,7 @@ export class Game {
 
     this.hud.show(true);
     this.state = 'playing';
+    this.audio.prepareWhenIdle();
     this.touch.goImmersive();
     this.touch.setBagOpen(false);
     this.touch.setActive(true);
@@ -461,11 +478,11 @@ export class Game {
     // befriended companions no longer scare it
     let nearestEnemy = Infinity;
     let nearestSubject = Infinity;
-    const fwd = new THREE.Vector3();
+    const fwd = this.viewDirection;
     p.camera.getWorldDirection(fwd);
     for (const e of this.spawner.enemies) {
       if (!e.alive) continue;
-      const to = e.position.clone().sub(p.position);
+      const to = this.enemyOffset.subVectors(e.position, p.position);
       const d = to.length();
       if (!e.befriended) nearestEnemy = Math.min(nearestEnemy, d);
       // anything caught in the beam cone drives the flashlight's auto-iris

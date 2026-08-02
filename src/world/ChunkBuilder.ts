@@ -12,6 +12,13 @@ const N = CELLS;
 
 type GeoBuckets = Record<string, THREE.BufferGeometry[]>;
 
+interface QuadBatch {
+  positions: number[];
+  normals: number[];
+  uvs: number[];
+  indices: number[];
+}
+
 /** Backlit product window of an almond water machine — a glow, not a lamp. */
 let vendGlassMat: THREE.MeshStandardMaterial | null = null;
 function vendGlass(): THREE.MeshStandardMaterial {
@@ -49,15 +56,44 @@ function pushCylinder(
 }
 
 /** Floor quad for one cell with UVs offset so the texture tiles across the chunk. */
-function pushFloorCell(buckets: GeoBuckets, key: string, i: number, j: number, wx0: number, wz0: number, y: number, up: boolean) {
-  const g = new THREE.PlaneGeometry(CELL, CELL);
-  g.rotateX(up ? -Math.PI / 2 : Math.PI / 2);
-  const uv = g.getAttribute('uv') as THREE.BufferAttribute;
-  for (let k = 0; k < uv.count; k++) {
-    uv.setXY(k, uv.getX(k) + i, uv.getY(k) + j);
+function pushFloorCell(
+  batches: Record<string, QuadBatch>,
+  key: string,
+  i: number,
+  j: number,
+  wx0: number,
+  wz0: number,
+  y: number,
+  up: boolean,
+): void {
+  const batch = batches[key] ??= { positions: [], normals: [], uvs: [], indices: [] };
+  const base = batch.positions.length / 3;
+  const x0 = wx0 + (i + 0.5) * CELL;
+  const z0 = wz0 + (j + 0.5) * CELL;
+  const half = CELL / 2;
+
+  // Same vertex order and UV orientation as PlaneGeometry, but all 256 cell
+  // quads for a material are written into one buffer instead of allocating a
+  // temporary geometry for every floor and ceiling cell.
+  for (let iy = 0; iy <= 1; iy++) {
+    const localY = iy * CELL - half;
+    for (let ix = 0; ix <= 1; ix++) {
+      const localX = ix * CELL - half;
+      batch.positions.push(x0 + localX, y, z0 + (up ? localY : -localY));
+      batch.normals.push(0, up ? 1 : -1, 0);
+      batch.uvs.push(ix + i, (1 - iy) + j);
+    }
   }
-  g.translate(wx0 + (i + 0.5) * CELL, y, wz0 + (j + 0.5) * CELL);
-  (buckets[key] ??= []).push(g);
+  batch.indices.push(base, base + 2, base + 1, base + 2, base + 3, base + 1);
+}
+
+function makeQuadGeometry(batch: QuadBatch): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(batch.positions, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(batch.normals, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(batch.uvs, 2));
+  geometry.setIndex(batch.indices);
+  return geometry;
 }
 
 interface BiomeMats { wall: string; floor: string; ceil: string; }
@@ -83,6 +119,7 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
   getGraffitiMaterials().forEach((m, i) => { matByKey[`graffiti${i}`] = m; });
   const bm = biomeMats(c.biome);
   const buckets: GeoBuckets = {};
+  const floorBatches: Record<string, QuadBatch> = {};
   const wx0 = c.cx * CHUNK;
   const wz0 = c.cz * CHUNK;
   const idx = (i: number, j: number) => j * N + i;
@@ -93,8 +130,8 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
       const k = idx(i, j);
       if (c.solid[k]) continue;
       const floorKey = c.water[k] && c.biome === BiomeId.Level37 ? 'tileFloor' : bm.floor;
-      pushFloorCell(buckets, floorKey, i, j, wx0, wz0, c.floor[k], true);
-      pushFloorCell(buckets, bm.ceil, i, j, wx0, wz0, c.ceil, false);
+      pushFloorCell(floorBatches, floorKey, i, j, wx0, wz0, c.floor[k], true);
+      pushFloorCell(floorBatches, bm.ceil, i, j, wx0, wz0, c.ceil, false);
     }
   }
 
@@ -250,6 +287,9 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
   }
 
   // ---- assemble ----
+  for (const [key, batch] of Object.entries(floorBatches)) {
+    (buckets[key] ??= []).push(makeQuadGeometry(batch));
+  }
   const group = new THREE.Group();
   group.name = `chunk_${c.cx}_${c.cz}`;
   for (const [key, geos] of Object.entries(buckets)) {

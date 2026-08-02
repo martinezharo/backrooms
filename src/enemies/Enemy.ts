@@ -24,6 +24,7 @@ export type EnemyState = 'wander' | 'stalk' | 'chase' | 'attack' | 'flee' | 'stu
 // scratch vectors for hot per-frame senses (no allocation)
 const _camFwd = new THREE.Vector3();
 const _toMe = new THREE.Vector3();
+const HIT_FLASH_COLOR = new THREE.Color(0xff2010);
 
 // shared sprite texture for the hearts that orbit a befriended entity
 let _heartTex: THREE.CanvasTexture | null = null;
@@ -116,6 +117,10 @@ export abstract class Enemy {
   private loseTimer = 0;
   private deathTimer = 0;
   private velocity = new THREE.Vector3();
+  private toPlayer = new THREE.Vector3();
+  private moveDir = new THREE.Vector3();
+  private faceTarget = new THREE.Vector3();
+  private targetScratch = new THREE.Vector3();
   private solids: AABB[] = [];
   private flashables: { mat: THREE.MeshStandardMaterial | THREE.MeshBasicMaterial; col: THREE.Color }[] = [];
   private heartSprites: THREE.Sprite[] = [];
@@ -203,10 +208,10 @@ export abstract class Enemy {
     this.hitFlash = Math.max(0, this.hitFlash - dt * 4);
     this.attackPulse = Math.max(0, this.attackPulse - dt * 4);
     for (const f of this.flashables) {
-      f.mat.color.copy(f.col).lerp(new THREE.Color(0xff2010), this.hitFlash * 0.85);
+      f.mat.color.copy(f.col).lerp(HIT_FLASH_COLOR, this.hitFlash * 0.85);
     }
 
-    const toPlayer = ctx.player.position.clone().sub(this.position);
+    const toPlayer = this.toPlayer.subVectors(ctx.player.position, this.position);
     const distToPlayer = toPlayer.length();
 
     if (this.befriended) {
@@ -220,7 +225,7 @@ export abstract class Enemy {
         this.state = distToPlayer < this.aggroRange ? 'chase'
           : distToPlayer < this.stalkRange ? 'stalk' : 'wander';
       }
-      this.applyMovement(dt, ctx, new THREE.Vector3());
+      this.applyMovement(dt, ctx, this.moveDir.set(0, 0, 0));
       this.animate(dt, 0, ctx);
       return;
     }
@@ -228,10 +233,11 @@ export abstract class Enemy {
     this.think(dt, ctx, distToPlayer);
 
     // movement target from current state
-    let moveDir = new THREE.Vector3();
+    const moveDir = this.moveDir.set(0, 0, 0);
     if (this.state === 'chase' || this.state === 'flee') {
       const target = this.state === 'flee'
-        ? this.position.clone().sub(toPlayer.clone().setY(0).normalize().multiplyScalar(6))
+        ? this.targetScratch.copy(toPlayer).setY(0).normalize().multiplyScalar(6)
+          .subVectors(this.position, this.targetScratch)
         : ctx.player.position;
       this.followPath(dt, ctx.world, target, moveDir);
     } else if (this.state === 'stalk') {
@@ -271,7 +277,7 @@ export abstract class Enemy {
     // face movement / player; frozen stalkers stare straight at you
     const faceTarget = this.state === 'chase' || (this.state === 'stalk' && this.frozen)
       ? ctx.player.position
-      : this.position.clone().add(moveDir);
+      : this.faceTarget.copy(this.position).add(moveDir);
     this.faceToward(faceTarget, dt);
 
     this.updateHead(dt, ctx, distToPlayer);
@@ -292,7 +298,7 @@ export abstract class Enemy {
     this.twitch = Math.max(0, this.twitch - dt * 6);
     const threat = this.nearestThreat(ctx);
     const distToThreat = threat ? this.position.distanceTo(threat.position) : Infinity;
-    const moveDir = new THREE.Vector3();
+    const moveDir = this.moveDir.set(0, 0, 0);
     if (threat && distToThreat > this.attackRange + threat.radius * 0.5) {
       // intercept an attacker, moving slightly faster than ordinary following
       this.followPath(dt, ctx.world, threat.position, moveDir, 1.15);
@@ -325,7 +331,7 @@ export abstract class Enemy {
     this.animate(dt, moved / Math.max(dt, 1e-4), ctx);
 
     const faceTarget = moveDir.lengthSq() > 1e-4
-      ? this.position.clone().add(moveDir)
+      ? this.faceTarget.copy(this.position).add(moveDir)
       : ctx.player.position;
     this.faceToward(faceTarget, dt);
     this.updateHead(dt, ctx, distToPlayer);

@@ -7,6 +7,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import type { RenderQuality } from './Quality';
 
 const AtmosphereShader = {
   uniforms: {
@@ -83,7 +84,12 @@ export class PostFX {
   private underwaterTarget = 0;
   private damageFlash = 0;
 
-  constructor(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) {
+  constructor(
+    renderer: THREE.WebGLRenderer,
+    scene: THREE.Scene,
+    camera: THREE.Camera,
+    quality: RenderQuality,
+  ) {
     this.composer = new EffectComposer(renderer);
     this.composer.addPass(new RenderPass(scene, camera));
 
@@ -97,6 +103,7 @@ export class PostFX {
     this.composer.addPass(this.atmo);
 
     this.composer.addPass(new OutputPass());
+    this.composer.setPixelRatio(quality.postfxPixelRatio);
   }
 
   setSize(w: number, h: number): void {
@@ -105,7 +112,9 @@ export class PostFX {
   }
 
   setUnderwater(under: boolean): void {
-    this.underwaterTarget = under ? 1 : 0;
+    const target = under ? 1 : 0;
+    if (target === this.underwaterTarget) return;
+    this.underwaterTarget = target;
   }
 
   triggerDamage(strength = 1): void {

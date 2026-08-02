@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { BIOMES } from '../world/Biomes';
 import { LightFixture } from '../world/Chunk';
 import { flickerOn, World } from '../world/World';
+import { CHUNK } from '../core/constants';
+import type { RenderQuality } from './Quality';
 
 const POOL_SIZE = 9;
 const REACH = 22; // only fixtures within this radius get a real light
@@ -15,6 +17,10 @@ const FLASHLIGHT_INTENSITY = 200;
 // subjects dim it so ACES doesn't blow them out to pure white.
 const IRIS_DIST = 6;
 const IRIS_MIN = 0.05;
+const _ambientColor = new THREE.Color();
+const _beamPoint = new THREE.Vector3();
+const _beamDirection = new THREE.Vector3();
+const _flashlightOffset = new THREE.Vector3(0.12, -0.18, 0);
 
 export class Lighting {
   private pool: THREE.PointLight[] = [];
@@ -30,10 +36,14 @@ export class Lighting {
   private subjectDist = Infinity;
   /** smoothed auto-iris exposure factor */
   private iris = 1;
+  private readonly direction = new THREE.Vector3();
+  private readonly position = new THREE.Vector3();
+  private readonly targetPosition = new THREE.Vector3();
+  private readonly near: { L: LightFixture; d: number; biomeLight: number; intensity: number }[] = [];
 
   private world: World;
 
-  constructor(scene: THREE.Scene, world: World) {
+  constructor(scene: THREE.Scene, world: World, quality: RenderQuality) {
     this.world = world;
     for (let i = 0; i < POOL_SIZE; i++) {
       const l = new THREE.PointLight(0xfff0bb, 0, 15, 1.8);
@@ -45,7 +55,7 @@ export class Lighting {
 
     this.flashlight = new THREE.SpotLight(0xfff6e0, 0, 26, Math.PI / 5.5, 0.45, 1.4);
     this.flashlight.castShadow = true;
-    this.flashlight.shadow.mapSize.set(1024, 1024);
+    this.flashlight.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize);
     this.flashlight.shadow.camera.near = 0.3;
     this.flashlight.shadow.camera.far = 26;
     this.flashlight.shadow.bias = -0.003;
@@ -72,20 +82,26 @@ export class Lighting {
     if (!this.flashlightOn) return false;
     // a beam choked down by a nearby entity no longer repels anything
     if (this.dimFactor < 0.3) return false;
-    const toP = p.clone().sub(this.flashlight.position);
+    const toP = _beamPoint.subVectors(p, this.flashlight.position);
     const dist = toP.length();
     if (dist > 24) return false;
-    const dir = this.flashlight.target.position.clone().sub(this.flashlight.position).normalize();
+    const dir = _beamDirection.subVectors(this.flashlight.target.position, this.flashlight.position).normalize();
     return toP.normalize().dot(dir) > Math.cos(Math.PI / 4.5);
   }
 
   /** Is a world point near a lit (working, currently-on) fixture? */
   isLitArea(p: THREE.Vector3, time: number): boolean {
-    for (const c of this.world.allChunks()) {
-      for (const L of c.lights) {
-        const dx = L.x - p.x;
-        const dz = L.z - p.z;
-        if (dx * dx + dz * dz < 16 && flickerOn(L, time)) return true;
+    const cx = Math.floor(p.x / CHUNK);
+    const cz = Math.floor(p.z / CHUNK);
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const c = this.world.getChunk(cx + dx, cz + dz);
+        if (!c) continue;
+        for (const L of c.lights) {
+          const lightDx = L.x - p.x;
+          const lightDz = L.z - p.z;
+          if (lightDx * lightDx + lightDz * lightDz < 16 && flickerOn(L, time)) return true;
+        }
       }
     }
     return false;
@@ -97,11 +113,12 @@ export class Lighting {
 
     // ambient follows the player's biome (lerped)
     const biome = this.world.biomeAt(px, pz);
-    this.ambient.color.lerp(new THREE.Color(biome.ambientColor), 0.04);
+    _ambientColor.setHex(biome.ambientColor);
+    this.ambient.color.lerp(_ambientColor, 0.04);
     this.ambient.intensity += (biome.ambientIntensity - this.ambient.intensity) * 0.04;
 
     // nearest fixtures get the real lights
-    const near: { L: LightFixture; d: number; biomeLight: number; intensity: number }[] = [];
+    this.near.length = 0;
     for (const c of this.world.allChunks()) {
       const def = BIOMES[c.biome];
       for (const L of c.lights) {
@@ -110,15 +127,15 @@ export class Lighting {
         const dz = L.z - pz;
         const d = dx * dx + dz * dz;
         if (d < REACH * REACH) {
-          near.push({ L, d, biomeLight: def.lightColor, intensity: def.lightIntensity });
+          this.near.push({ L, d, biomeLight: def.lightColor, intensity: def.lightIntensity });
         }
       }
     }
-    near.sort((a, b) => a.d - b.d);
+    this.near.sort((a, b) => a.d - b.d);
 
     for (let i = 0; i < POOL_SIZE; i++) {
       const light = this.pool[i];
-      const entry = near[i];
+      const entry = this.near[i];
       if (!entry) {
         light.intensity = 0;
         continue;
@@ -138,11 +155,11 @@ export class Lighting {
     }
 
     // flashlight follows the camera with a slight lag for weight
-    const dir = new THREE.Vector3();
+    const dir = this.direction;
     camera.getWorldDirection(dir);
-    const pos = camera.position.clone()
-      .add(dir.clone().multiplyScalar(0.25))
-      .add(new THREE.Vector3(0.12, -0.18, 0));
+    const pos = this.position.copy(camera.position)
+      .addScaledVector(dir, 0.25)
+      .add(_flashlightOffset);
     this.flashlight.position.lerp(pos, 0.5);
 
     // auto-iris: how far away is whatever the beam is pointed at?
@@ -170,7 +187,7 @@ export class Lighting {
     );
     this.iris += (irisTarget - this.iris) * 0.18;
 
-    const targetPos = camera.position.clone().add(dir.multiplyScalar(12));
+    const targetPos = this.targetPosition.copy(camera.position).addScaledVector(dir, 12);
     this.flashlight.target.position.lerp(targetPos, 0.35);
 
     // something near = the torch starts to die: nervous flicker that cuts out
