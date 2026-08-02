@@ -36,6 +36,9 @@ export class AudioEngine {
   private buffers = new Map<string, AudioBuffer>();
   private ambGraphs = new Map<AmbienceId, GainNode>();
   private currentAmbience: AmbienceId | null = null;
+  private sfxReady = false;
+  private sfxIdleScheduled = false;
+  private muffled = false;
   private dripTimer = 0;
   private sprayNode: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
   private windNode: { src: AudioBufferSourceNode; gain: GainNode; filter: BiquadFilterNode } | null = null;
@@ -63,7 +66,25 @@ export class AudioEngine {
     this.ambBus.connect(convolver);
     convolver.connect(this.master);
     this.ambBus.connect(this.master);
+  }
 
+  /** Prepare the procedural buffers away from the landing-page critical path. */
+  prepareWhenIdle(): void {
+    if (this.sfxReady || this.sfxIdleScheduled) return;
+    this.sfxIdleScheduled = true;
+    const win = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+    };
+    if (win.requestIdleCallback) {
+      win.requestIdleCallback(() => this.prepareSfx(), { timeout: 1800 });
+    } else {
+      window.setTimeout(() => this.prepareSfx(), 0);
+    }
+  }
+
+  private prepareSfx(): void {
+    if (this.sfxReady) return;
+    this.sfxReady = true;
     this.synthesizeSfx();
   }
 
@@ -305,6 +326,7 @@ export class AudioEngine {
   }
 
   playSfx(name: string, volume = 1, rateJitter = 0.08): void {
+    this.prepareSfx();
     const buf = this.buffers.get(name);
     if (!buf || this.ctx.state !== 'running') return;
     const src = this.ctx.createBufferSource();
@@ -322,6 +344,7 @@ export class AudioEngine {
   }
 
   startSprayLoop(): void {
+    this.prepareSfx();
     if (this.sprayNode || this.ctx.state !== 'running') return;
     const src = this.ctx.createBufferSource();
     src.buffer = this.buffers.get('spray')!;
@@ -346,6 +369,7 @@ export class AudioEngine {
 
   /** Freefall wind: filtered noise whose brightness tracks how fast you're going. */
   startWind(): void {
+    this.prepareSfx();
     if (this.windNode || this.ctx.state !== 'running') return;
     const src = this.ctx.createBufferSource();
     src.buffer = this.buffers.get('windLoop')!;
@@ -389,6 +413,7 @@ export class AudioEngine {
 
   /** One-shot positional sound attached to an object (enemy), self-removing. */
   playCueAt(name: string, parent: THREE.Object3D, volume = 1, refDist = 4): void {
+    this.prepareSfx();
     const buf = this.buffers.get(name);
     if (!buf || this.ctx.state !== 'running') return;
     const audio = new THREE.PositionalAudio(this.listener);
@@ -518,6 +543,8 @@ export class AudioEngine {
   }
 
   setMuffled(underwater: boolean): void {
+    if (this.muffled === underwater) return;
+    this.muffled = underwater;
     // underwater: duck the high-frequency-rich sfx bus
     this.sfxBus.gain.setTargetAtTime(underwater ? 0.4 : 1, this.ctx.currentTime, 0.15);
     this.ambBus.gain.setTargetAtTime(underwater ? 0.25 : 0.8, this.ctx.currentTime, 0.15);
