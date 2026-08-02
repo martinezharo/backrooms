@@ -1,9 +1,18 @@
-// Everything you hear is synthesized at runtime — no audio files.
-// SFX are pre-rendered into AudioBuffers; ambiences are live node graphs
-// crossfaded per biome; enemy cues are one-shot buffers placed on
-// PositionalAudio at AI moments (stalking whispers, chase stingers).
+// Almost everything you hear is synthesized at runtime. SFX are pre-rendered
+// into AudioBuffers; ambiences are live node graphs crossfaded per biome; enemy
+// cues are one-shot buffers placed on PositionalAudio at AI moments.
+//
+// The exception is the hauntings (see clips/CREDITS.md): a scream or a whisper
+// has to be a recording of an actual throat — synthesis gets you a synthesizer
+// pretending, and you hear the difference immediately.
 
 import * as THREE from 'three';
+
+import dragScrapeUrl from './clips/drag_scrape.mp3?url';
+import earWhisperUrl from './clips/ear_whisper.mp3?url';
+import farBangUrl from './clips/far_bang.mp3?url';
+import farScreamUrl from './clips/far_scream.mp3?url';
+import metalFallUrl from './clips/metal_fall.mp3?url';
 
 type AmbienceId = 'hum' | 'tunnel' | 'pool' | 'deep';
 
@@ -27,6 +36,60 @@ function envExp(i: number, sr: number, decay: number): number {
   return Math.exp((-i / sr) * decay);
 }
 
+/** how a haunting is placed around your head */
+interface HauntOptions {
+  /** metres-ish: 0.3 is against your ear, 30 is somewhere down the corridor */
+  distance?: number;
+  /** starting angle in radians, 0 = ahead, positive = to your right */
+  azimuth?: number;
+  /** orbit speed in rad/s — this is what makes it swim around you */
+  spin?: number;
+  volume?: number;
+}
+
+const HAUNTINGS: { name: string; url: string; weight: number; place: () => HauntOptions }[] = [
+  {
+    // a scream several rooms away, drowned in reverb
+    name: 'far_scream',
+    url: farScreamUrl,
+    weight: 1,
+    place: () => ({ distance: 22 + Math.random() * 18, spin: (Math.random() - 0.5) * 0.5, volume: 1 }),
+  },
+  {
+    // shelving, pipes, something heavy giving way
+    name: 'metal_fall',
+    url: metalFallUrl,
+    weight: 1.1,
+    place: () => ({ distance: 11 + Math.random() * 16, spin: (Math.random() - 0.5) * 0.7, volume: 0.95 }),
+  },
+  {
+    // a door, or a body, hitting a wall
+    name: 'far_bang',
+    url: farBangUrl,
+    weight: 0.9,
+    place: () => ({ distance: 17 + Math.random() * 18, spin: (Math.random() - 0.5) * 0.4, volume: 0.9 }),
+  },
+  {
+    // something dragged across the carpet, circling
+    name: 'drag_scrape',
+    url: dragScrapeUrl,
+    weight: 0.8,
+    place: () => ({ distance: 6 + Math.random() * 8, spin: (Math.random() < 0.5 ? -1 : 1) * (0.5 + Math.random() * 0.5), volume: 0.85 }),
+  },
+  {
+    // right behind your ear — close enough that you check the headphones
+    name: 'ear_whisper',
+    url: earWhisperUrl,
+    weight: 0.7,
+    place: () => ({
+      distance: 0.3,
+      azimuth: Math.PI + (Math.random() - 0.5) * 1.2,
+      spin: (Math.random() < 0.5 ? -1 : 1) * (0.5 + Math.random() * 0.7),
+      volume: 0.75,
+    }),
+  },
+];
+
 export class AudioEngine {
   listener = new THREE.AudioListener();
   private ctx: AudioContext;
@@ -38,8 +101,12 @@ export class AudioEngine {
   private currentAmbience: AmbienceId | null = null;
   private sfxReady = false;
   private sfxIdleScheduled = false;
+  private hauntBus: GainNode;
+  private hauntWet: GainNode;
   private muffled = false;
   private dripTimer = 0;
+  private hauntTimer = 25 + Math.random() * 35;
+  private dread = 0;
   private sprayNode: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
   private windNode: { src: AudioBufferSourceNode; gain: GainNode; filter: BiquadFilterNode } | null = null;
 
@@ -66,6 +133,25 @@ export class AudioEngine {
     this.ambBus.connect(convolver);
     convolver.connect(this.master);
     this.ambBus.connect(this.master);
+
+    // Hauntings get their own bus: a long, dark tail so the far ones sound like
+    // they crossed a lot of empty rooms to reach you. It bypasses the listener's
+    // 3D panning on purpose — these are placed relative to your head, not the world.
+    this.hauntBus = this.ctx.createGain();
+    this.hauntBus.gain.value = 1;
+    this.hauntBus.connect(this.master);
+
+    const hall = this.ctx.createConvolver();
+    hall.buffer = makeBuffer(this.ctx, 3.6, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        d[i] = (Math.random() * 2 - 1) * envExp(i, sr, 1.5) * 0.6;
+      }
+      lowpass(d, 0.15);
+    });
+    this.hauntWet = this.ctx.createGain();
+    this.hauntWet.gain.value = 1;
+    this.hauntWet.connect(hall);
+    hall.connect(this.hauntBus);
   }
 
   /** Prepare the procedural buffers away from the landing-page critical path. */
@@ -86,6 +172,25 @@ export class AudioEngine {
     if (this.sfxReady) return;
     this.sfxReady = true;
     this.synthesizeSfx();
+    void this.loadHauntClips();
+  }
+
+  /**
+   * The only fetched audio in the game. Small, lazy, and failure is survivable:
+   * a haunting whose clip never arrived simply doesn't happen.
+   */
+  private async loadHauntClips(): Promise<void> {
+    await Promise.all(
+      HAUNTINGS.map(async (h) => {
+        try {
+          const res = await fetch(h.url);
+          if (!res.ok) return;
+          this.buffers.set(h.name, await this.ctx.decodeAudioData(await res.arrayBuffer()));
+        } catch {
+          // offline, or the asset didn't ship — stay quiet rather than break the run
+        }
+      }),
+    );
   }
 
   async resume(): Promise<void> {
@@ -407,6 +512,7 @@ export class AudioEngine {
     const t = this.ctx.currentTime;
     this.ambBus.gain.setTargetAtTime(0.8 * (1 - amount), t, 0.4);
     this.sfxBus.gain.setTargetAtTime(1 - amount, t, 0.4);
+    this.hauntBus.gain.setTargetAtTime(1 - amount, t, 0.4);
   }
 
   // ------------------------------------------------------------- cues
@@ -429,6 +535,135 @@ export class AudioEngine {
       parent.remove(audio);
     };
     audio.play();
+  }
+
+  // -------------------------------------------------------- hauntings
+
+  /**
+   * Play a one-shot binaurally, orbiting your head — the "8D" trick.
+   * Rather than a PannerNode (which is anchored to the world listener, so it
+   * would rotate away as you turn), this builds the two ear signals by hand:
+   * interaural delay, head-shadow filtering and level difference, all animated
+   * along the orbit. The result sits outside the stereo image, which is what
+   * makes you unsure whether it came from the game or from the room you're in.
+   */
+  playHaunt(name: string, opts: HauntOptions = {}): void {
+    this.prepareSfx();
+    const buf = this.buffers.get(name);
+    if (!buf || this.ctx.state !== 'running') return;
+
+    const ctx = this.ctx;
+    const t0 = ctx.currentTime;
+    const dist = opts.distance ?? 8;
+    const spin = opts.spin ?? 0.4;
+    const rate = 1 + (Math.random() - 0.5) * 0.14;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+    const dur = buf.duration / rate;
+
+    // distance: quieter, darker, and far more reverberant the further out it is
+    const air = ctx.createBiquadFilter();
+    air.type = 'lowpass';
+    air.frequency.value = Math.max(650, 19000 / (1 + dist * 0.75));
+
+    // front/back cue: what's behind you loses its top end (pinna shadow)
+    const pinna = ctx.createBiquadFilter();
+    pinna.type = 'lowpass';
+    pinna.frequency.value = 16000;
+
+    const pre = ctx.createGain();
+    pre.gain.value = ((opts.volume ?? 1) * 2) / (1 + dist * 0.3);
+    src.connect(air);
+    air.connect(pinna);
+    pinna.connect(pre);
+
+    const ears = [0, 1].map(() => ({
+      delay: ctx.createDelay(0.02),
+      shadow: ctx.createBiquadFilter(),
+      gain: ctx.createGain(),
+    }));
+    const merger = ctx.createChannelMerger(2);
+    ears.forEach((ear, ch) => {
+      ear.shadow.type = 'lowpass';
+      pre.connect(ear.delay);
+      ear.delay.connect(ear.shadow);
+      ear.shadow.connect(ear.gain);
+      ear.gain.connect(merger, 0, ch);
+    });
+
+    const out = ctx.createGain();
+    out.gain.value = 1;
+    merger.connect(out);
+    out.connect(this.hauntBus);
+    const send = ctx.createGain();
+    // close whispers stay dry; distant events arrive mostly as their own echo
+    send.gain.value = Math.min(0.9, 0.12 + dist * 0.045);
+    out.connect(send);
+    send.connect(this.hauntWet);
+
+    // walk the orbit, writing automation points for every ear parameter
+    const BASE_DELAY = 0.0012;
+    const ITD = 0.00035;
+    const az0 = opts.azimuth ?? Math.random() * Math.PI * 2;
+    const steps = Math.max(2, Math.ceil(dur / 0.04));
+    for (let s = 0; s <= steps; s++) {
+      const dt = (s / steps) * dur;
+      const az = az0 + spin * dt;
+      const sinA = Math.sin(az);
+      const cosA = Math.cos(az);
+      const time = t0 + dt;
+      const set = (p: AudioParam, v: number) => {
+        if (s === 0) p.setValueAtTime(v, time);
+        else p.linearRampToValueAtTime(v, time);
+      };
+      set(pinna.frequency, 3200 + 12000 * (0.5 + 0.5 * cosA));
+      ears.forEach((ear, ch) => {
+        const side = ch === 0 ? -1 : 1; // -1 left ear, +1 right ear
+        const toward = side * sinA; // 1 when the sound is on this ear's side
+        set(ear.delay.delayTime, BASE_DELAY - ITD * toward);
+        set(ear.gain.gain, 0.72 + 0.34 * toward);
+        set(ear.shadow.frequency, 2200 + 14000 * (0.5 + 0.5 * toward));
+      });
+    }
+
+    src.onended = () => {
+      out.disconnect();
+      send.disconnect();
+      merger.disconnect();
+      for (const ear of ears) ear.gain.disconnect();
+      src.disconnect();
+    };
+    src.start();
+  }
+
+  /** 0..1 — how much the maze is currently pressing on you; crowds the hauntings. */
+  setDread(level: number): void {
+    this.dread = Math.max(0, Math.min(1, level));
+  }
+
+  private scheduleHaunting(dt: number): void {
+    this.hauntTimer -= dt * (1 + this.dread * 1.6);
+    if (this.hauntTimer > 0) return;
+    // sparse by default, and never quite on a rhythm you could learn
+    this.hauntTimer = (32 + Math.random() * 55) * (1 - this.dread * 0.4);
+
+    const total = HAUNTINGS.reduce((sum, h) => sum + h.weight, 0);
+    let roll = Math.random() * total;
+    for (const h of HAUNTINGS) {
+      roll -= h.weight;
+      if (roll <= 0) {
+        // clip still in flight (very early in a run): come back for it shortly
+        // rather than burning the event on silence
+        if (!this.buffers.has(h.name)) {
+          this.prepareSfx();
+          this.hauntTimer = 5;
+          return;
+        }
+        this.playHaunt(h.name, h.place());
+        return;
+      }
+    }
   }
 
   // ---------------------------------------------------------- ambience
@@ -540,6 +775,7 @@ export class AudioEngine {
         this.playSfx('drip', 0.12 + Math.random() * 0.2, 0.4);
       }
     }
+    this.scheduleHaunting(dt);
   }
 
   setMuffled(underwater: boolean): void {
@@ -548,5 +784,6 @@ export class AudioEngine {
     // underwater: duck the high-frequency-rich sfx bus
     this.sfxBus.gain.setTargetAtTime(underwater ? 0.4 : 1, this.ctx.currentTime, 0.15);
     this.ambBus.gain.setTargetAtTime(underwater ? 0.25 : 0.8, this.ctx.currentTime, 0.15);
+    this.hauntBus.gain.setTargetAtTime(underwater ? 0.35 : 1, this.ctx.currentTime, 0.15);
   }
 }

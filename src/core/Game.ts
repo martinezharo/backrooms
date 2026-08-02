@@ -503,6 +503,7 @@ export class Game {
 
     const danger = this.spawner.dangerLevel(p.position);
     this.music.setTension(danger);
+    this.audio.setDread(danger);
     this.music.update();
 
     // ---- objective ----
