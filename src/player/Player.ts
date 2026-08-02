@@ -13,6 +13,18 @@ import { AABB, World } from '../world/World';
 const MAX_STEP = 0.45;
 /** seconds of relaxed step collision after a water mantle starts */
 const MANTLE_TIME = 0.5;
+/**
+ * Metres per stride. Longer than a real one (~0.75 m) because the walk speed is
+ * exaggerated too: at WALK_SPEED this lands about two steps a second, which is
+ * what a person actually sounds like, instead of the sprint a literal stride
+ * would give you.
+ */
+const STRIDE = 1.75;
+const CROUCH_STRIDE = 1.05;
+/** m/s of fall below which a landing is just the controller settling on a ledge */
+const LAND_MIN_FALL = 2.2;
+/** extra m/s on top of that for a landing to count as the full drop */
+const LAND_FULL_FALL = 6;
 
 export class Player {
   camera: THREE.PerspectiveCamera;
@@ -37,7 +49,8 @@ export class Player {
   /** extra camera dip while drinking from a tap */
   drinkDip = 0;
 
-  onFootstep: ((surface: 'carpet' | 'hard' | 'water') => void) | null = null;
+  onFootstep: ((surface: 'carpet' | 'hard', intensity: number, inWater: boolean) => void) | null = null;
+  onLand: ((surface: 'carpet' | 'hard', impact: number, inWater: boolean) => void) | null = null;
   onSplash: (() => void) | null = null;
 
   private bobTime = 0;
@@ -63,6 +76,15 @@ export class Player {
 
   get eyeY(): number {
     return this.position.y + this.height * EYE_RATIO;
+  }
+
+  /**
+   * What is under the feet, as far as the ear is concerned. Only Level 0 is
+   * carpeted; every other floor in the game is some flavour of hard, and they
+   * all share one neutral step rather than each getting a character of its own.
+   */
+  private surfaceAt(world: World): 'carpet' | 'hard' {
+    return world.biomeAt(this.position.x, this.position.z).ambienceId === 'hum' ? 'carpet' : 'hard';
   }
 
   update(dt: number, input: Input, world: World, sensitivity = 0.0023): void {
@@ -165,6 +187,12 @@ export class Player {
     const ground = world.groundHeight(this.position.x, this.position.z, PLAYER_RADIUS, feetY + 0.3, MAX_STEP);
     if (this.position.y <= ground) {
       this.position.y = ground;
+      // Landing, before the fall is thrown away: below LAND_MIN_FALL this is the
+      // controller settling over uneven floor every other frame, not a jump.
+      if (!this.grounded && this.velocity.y < -LAND_MIN_FALL) {
+        const impact = Math.min(1, (-this.velocity.y - LAND_MIN_FALL) / LAND_FULL_FALL);
+        this.onLand?.(this.surfaceAt(world), impact, this.inWater);
+      }
       if (this.velocity.y < 0) this.velocity.y = 0;
       this.grounded = true;
     } else {
@@ -180,12 +208,17 @@ export class Player {
     const horizSpeed = Math.hypot(this.velocity.x, this.velocity.z);
     let bobAmp = 0;
     if (this.grounded && horizSpeed > 0.4) {
-      this.bobTime += dt * (4.5 + horizSpeed * 1.55);
+      // Bob runs off distance covered, not off a clock: one stride advances the
+      // phase by exactly PI, so the head dips once per foot and the step lands
+      // on the dip at any speed. Driving it from time meant the cadence drifted
+      // out of step with how fast you were actually crossing the floor.
+      const stride = this.crouching ? CROUCH_STRIDE : STRIDE;
+      this.bobTime += (horizSpeed * dt / stride) * Math.PI;
       bobAmp = Math.min(0.05, 0.014 + horizSpeed * 0.005);
       const phase = Math.sin(this.bobTime);
-      if (this.bobPhasePrev > 0 && phase <= 0) {
-        const surf = this.inWater ? 'water' : world.biomeAt(this.position.x, this.position.z).ambienceId === 'hum' ? 'carpet' : 'hard';
-        this.onFootstep?.(surf);
+      if (this.bobPhasePrev > 0 !== phase > 0) {
+        const intensity = Math.min(1, Math.max(0, (horizSpeed - 1.2) / (RUN_SPEED - 1.2)));
+        this.onFootstep?.(this.surfaceAt(world), intensity, this.inWater);
       }
       this.bobPhasePrev = phase;
     } else if (this.swimming) {

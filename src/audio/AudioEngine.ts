@@ -2,9 +2,11 @@
 // into AudioBuffers; ambiences are live node graphs crossfaded per biome; enemy
 // cues are one-shot buffers placed on PositionalAudio at AI moments.
 //
-// The exception is the hauntings (see clips/CREDITS.md): a scream or a whisper
-// has to be a recording of an actual throat — synthesis gets you a synthesizer
-// pretending, and you hear the difference immediately.
+// The exceptions are the hauntings and the footsteps (see clips/CREDITS.md): a
+// scream, a whisper, a boot landing on concrete — synthesis gets you a
+// synthesizer pretending, and you hear the difference immediately. Footsteps in
+// particular are the sound you hear most in the whole game, so they get real
+// recordings and the ear is left nothing to catch.
 
 import * as THREE from 'three';
 
@@ -13,8 +15,42 @@ import earWhisperUrl from './clips/ear_whisper.mp3?url';
 import farBangUrl from './clips/far_bang.mp3?url';
 import farScreamUrl from './clips/far_scream.mp3?url';
 import metalFallUrl from './clips/metal_fall.mp3?url';
+import stepCarpetL1 from './clips/steps/step_carpet_l1.mp3?url';
+import stepCarpetL2 from './clips/steps/step_carpet_l2.mp3?url';
+import stepCarpetR1 from './clips/steps/step_carpet_r1.mp3?url';
+import stepCarpetR2 from './clips/steps/step_carpet_r2.mp3?url';
+import stepHardL1 from './clips/steps/step_hard_l1.mp3?url';
+import stepHardL2 from './clips/steps/step_hard_l2.mp3?url';
+import stepHardR1 from './clips/steps/step_hard_r1.mp3?url';
+import stepHardR2 from './clips/steps/step_hard_r2.mp3?url';
+import wadeLoopUrl from './clips/steps/wade_loop.mp3?url';
+import waterImpact1 from './clips/steps/water_impact_1.mp3?url';
+import waterImpact2 from './clips/steps/water_impact_2.mp3?url';
+import waterImpact3 from './clips/steps/water_impact_3.mp3?url';
 
 type AmbienceId = 'hum' | 'tunnel' | 'pool' | 'deep';
+/**
+ * Only two dry surfaces, deliberately. The tunnels and the poolrooms tried a
+ * stone recording for a while and it read as gravel underfoot — an outdoor
+ * sound in a building. One neutral indoor step covers every floor that isn't
+ * carpet and stops the ear asking questions.
+ */
+type Surface = 'carpet' | 'hard';
+
+/**
+ * Recorded steps, kept in left/right pairs. Two feet on one body are close but
+ * never identical, and alternating real takes is what stops a walk cycle from
+ * turning into a loop you can hear repeating.
+ */
+const STEP_CLIPS: Record<Surface, { l: string[]; r: string[] }> = {
+  carpet: { l: [stepCarpetL1, stepCarpetL2], r: [stepCarpetR1, stepCarpetR2] },
+  hard: { l: [stepHardL1, stepHardL2], r: [stepHardR1, stepHardR2] },
+};
+
+const WATER_IMPACTS = [waterImpact1, waterImpact2, waterImpact3];
+
+/** how loud each surface sits, after the clips were levelled against each other */
+const STEP_GAIN: Record<Surface, number> = { carpet: 0.34, hard: 0.38 };
 
 function makeBuffer(ctx: AudioContext, seconds: number, fill: (data: Float32Array, sr: number) => void): AudioBuffer {
   const sr = ctx.sampleRate;
@@ -35,6 +71,7 @@ function lowpass(data: Float32Array, k: number): void {
 function envExp(i: number, sr: number, decay: number): number {
   return Math.exp((-i / sr) * decay);
 }
+
 
 /** how a haunting is placed around your head */
 interface HauntOptions {
@@ -108,6 +145,11 @@ export class AudioEngine {
   private hauntTimer = 25 + Math.random() * 35;
   private dread = 0;
   private sprayNode: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private stepOnsets = new Map<string, number>();
+  private stepVariant = 0;
+  private stepLeft = false;
+  private wadeNode: { src: AudioBufferSourceNode; gain: GainNode; filter: BiquadFilterNode } | null = null;
+  private wadeLevel = 0;
   private windNode: { src: AudioBufferSourceNode; gain: GainNode; filter: BiquadFilterNode } | null = null;
 
   constructor() {
@@ -173,6 +215,38 @@ export class AudioEngine {
     this.sfxReady = true;
     this.synthesizeSfx();
     void this.loadHauntClips();
+    void this.loadStepClips();
+  }
+
+  /**
+   * Steps are the one recorded sound that has to be ready early, so they load
+   * alongside the hauntings rather than on first use. MP3 decoders hand back a
+   * few milliseconds of encoder padding at the head of the buffer; we find the
+   * real onset once, here, and start playback from it — otherwise every step
+   * lands late by a hair and the whole walk feels rubbery.
+   */
+  private async loadStepClips(): Promise<void> {
+    const urls = [
+      ...Object.values(STEP_CLIPS).flatMap((feet) => [...feet.l, ...feet.r]),
+      ...WATER_IMPACTS,
+      wadeLoopUrl,
+    ];
+    await Promise.all(
+      urls.map(async (url) => {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) return;
+          const buf = await this.ctx.decodeAudioData(await res.arrayBuffer());
+          const d = buf.getChannelData(0);
+          let onset = 0;
+          while (onset < d.length && Math.abs(d[onset]) < 0.002) onset++;
+          this.buffers.set(url, buf);
+          this.stepOnsets.set(url, onset / buf.sampleRate);
+        } catch {
+          // a step that never arrived is silent, not fatal
+        }
+      }),
+    );
   }
 
   /**
@@ -215,18 +289,6 @@ export class AudioEngine {
     const ctx = this.ctx;
     const B = this.buffers;
 
-    B.set('step_carpet', makeBuffer(ctx, 0.12, (d, sr) => {
-      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * envExp(i, sr, 55) * 0.5;
-      lowpass(d, 0.12);
-    }));
-    B.set('step_hard', makeBuffer(ctx, 0.1, (d, sr) => {
-      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * envExp(i, sr, 70) * 0.7;
-      lowpass(d, 0.3);
-    }));
-    B.set('step_water', makeBuffer(ctx, 0.25, (d, sr) => {
-      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * envExp(i, sr, 22) * 0.55;
-      lowpass(d, 0.2);
-    }));
     B.set('splash', makeBuffer(ctx, 0.7, (d, sr) => {
       for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * envExp(i, sr, 7) * 0.8;
       lowpass(d, 0.18);
@@ -444,8 +506,135 @@ export class AudioEngine {
     src.start();
   }
 
-  footstep(surface: 'carpet' | 'hard' | 'water'): void {
-    this.playSfx(`step_${surface}`, 0.5, 0.18);
+  /**
+   * @param intensity 0 for a slow walk, 1 for a full sprint — moves weight and
+   *   brightness together, so running lands harder rather than just louder.
+   */
+  footstep(surface: Surface, intensity = 1): void {
+    this.prepareSfx();
+    this.stepLeft = !this.stepLeft;
+    const takes = this.stepLeft ? STEP_CLIPS[surface].l : STEP_CLIPS[surface].r;
+    // walk the takes rather than pick at random: random repeats itself, and a
+    // step landing twice on the same recording is exactly what the ear catches
+    this.stepVariant = (this.stepVariant + 1) % takes.length;
+    const url = takes[this.stepVariant];
+
+    const buf = this.buffers.get(url);
+    if (!buf || this.ctx.state !== 'running') return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    // just enough pitch drift to blur the seams — these are real takes, so they
+    // need far less help than the synthesized ones did
+    src.playbackRate.value = (1 + (Math.random() - 0.5) * 0.06) * (1.03 - intensity * 0.05);
+
+    // a fast step is a harder step: it lands louder and keeps more of its top end
+    const tone = this.ctx.createBiquadFilter();
+    tone.type = 'lowpass';
+    tone.frequency.value = 2200 + intensity * 9000;
+
+    const g = this.ctx.createGain();
+    g.gain.value = STEP_GAIN[surface] * (0.55 + intensity * 0.55);
+    const pan = this.ctx.createStereoPanner();
+    pan.pan.value = (this.stepLeft ? -0.16 : 0.16) * (0.7 + Math.random() * 0.6);
+    src.connect(tone).connect(g).connect(pan).connect(this.sfxBus);
+    src.start(0, this.stepOnsets.get(url) ?? 0);
+  }
+
+  /**
+   * Both feet arriving at once. It is the same recording as a step, dropped a
+   * fifth and hit much harder — pitching a real contact down is what gives it
+   * the mass a jump needs, and layering the two feet a few milliseconds apart
+   * keeps it from reading as one very loud step.
+   *
+   * @param impact 0 for stepping off a kerb, 1 for a drop that should hurt
+   */
+  land(surface: Surface, impact: number, inWater: boolean): void {
+    this.prepareSfx();
+    if (this.ctx.state !== 'running') return;
+    if (inWater) {
+      this.playClip(
+        WATER_IMPACTS[Math.floor(Math.random() * WATER_IMPACTS.length)],
+        0.3 + impact * 0.5,
+        0.9 + Math.random() * 0.12,
+      );
+      this.wadeSurge(0.6 + impact * 0.5);
+      return;
+    }
+    const feet = STEP_CLIPS[surface];
+    const gain = STEP_GAIN[surface] * (0.9 + impact * 1.5);
+    const rate = 0.68 - impact * 0.06;
+    this.playClip(feet.l[Math.floor(Math.random() * feet.l.length)], gain, rate);
+    this.playClip(feet.r[Math.floor(Math.random() * feet.r.length)], gain * 0.7, rate * 1.04,
+      0.012 + Math.random() * 0.02);
+  }
+
+  private playClip(url: string, volume: number, rate: number, delay = 0): void {
+    const buf = this.buffers.get(url);
+    if (!buf) return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+    const g = this.ctx.createGain();
+    g.gain.value = volume;
+    src.connect(g).connect(this.sfxBus);
+    src.start(this.ctx.currentTime + delay, this.stepOnsets.get(url) ?? 0);
+  }
+
+  /**
+   * Wading is not a sequence of footsteps — it is water being pushed around,
+   * continuously, for as long as you keep moving. So it runs as a loop whose
+   * level follows your speed, and each stride swells it instead of dropping a
+   * separate splash on top.
+   *
+   * @param intensity 0 when still or out of the water, 1 at a full run
+   */
+  setWading(intensity: number): void {
+    if (intensity <= 0 && !this.wadeNode) return;
+    this.prepareSfx();
+    if (this.ctx.state !== 'running') return;
+
+    if (!this.wadeNode) {
+      const buf = this.buffers.get(wadeLoopUrl);
+      if (!buf) return;
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0;
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 1600;
+      src.connect(filter).connect(gain).connect(this.sfxBus);
+      src.start(Math.random() * buf.duration);
+      this.wadeNode = { src, gain, filter };
+    }
+
+    const { gain, filter, src } = this.wadeNode;
+    this.wadeLevel = intensity;
+    // slow to come up, slower to fall away: water keeps sloshing after you stop
+    gain.gain.setTargetAtTime(0.42 * intensity, this.ctx.currentTime, intensity > 0.05 ? 0.12 : 0.35);
+    filter.frequency.setTargetAtTime(1100 + intensity * 3200, this.ctx.currentTime, 0.2);
+    src.playbackRate.setTargetAtTime(0.85 + intensity * 0.35, this.ctx.currentTime, 0.2);
+  }
+
+  /** one stride's worth of water shoved aside, ridden on top of the wade loop */
+  wadeSurge(amount = 1): void {
+    if (!this.wadeNode) return;
+    const g = this.wadeNode.gain.gain;
+    const t = this.ctx.currentTime;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(g.value, t);
+    g.linearRampToValueAtTime(Math.min(0.95, 0.42 * this.wadeLevel + 0.3 * amount), t + 0.05);
+    g.setTargetAtTime(0.42 * this.wadeLevel, t + 0.05, 0.16);
+  }
+
+  stopWading(): void {
+    if (!this.wadeNode) return;
+    const node = this.wadeNode;
+    this.wadeNode = null;
+    this.wadeLevel = 0;
+    node.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.15);
+    setTimeout(() => node.src.stop(), 600);
   }
 
   startSprayLoop(): void {

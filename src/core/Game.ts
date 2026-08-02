@@ -19,7 +19,7 @@ import { BiomeId, BIOMES, biomeForChunk } from '../world/Biomes';
 import { FUSE_COUNT, objectiveLayout } from '../world/Objective';
 import { PortalManager } from '../world/Portal';
 import { World } from '../world/World';
-import { CHUNK } from './constants';
+import { CHUNK, RUN_SPEED } from './constants';
 import { HUD, ObjectiveView } from '../ui/HUD';
 import { InventoryUI } from '../ui/InventoryUI';
 import { Menus } from '../ui/Menus';
@@ -186,7 +186,13 @@ export class Game {
     };
     this.combat.onMessage = (m) => this.flashMessage(m);
 
-    this.player.onFootstep = (s) => this.audio.footstep(s);
+    // In water a stride doesn't land, it shoves: the wade loop swells instead
+    // of a step being dropped on top of it.
+    this.player.onFootstep = (s, intensity, inWater) => {
+      if (inWater) this.audio.wadeSurge(0.4 + intensity * 0.6);
+      else this.audio.footstep(s, intensity);
+    };
+    this.player.onLand = (s, impact, inWater) => this.audio.land(s, impact, inWater);
     this.player.onSplash = () => this.audio.playSfx('splash', 0.6);
 
     this.invUI.onDrop = (item) => this.dropItem(item);
@@ -475,6 +481,15 @@ export class Game {
     this.postfx.setWaterTint(biome.underwaterTint);
     this.hud.announceBiome(biome.name);
     this.audio.setAmbience(biome.ambienceId);
+
+    // wading follows how fast you are dragging yourself through the water, and
+    // keeps a floor under it while submerged so the water never goes silent
+    if (p.inWater) {
+      const speed = Math.hypot(p.velocity.x, p.velocity.z);
+      this.audio.setWading(Math.max(p.swimming ? 0.12 : 0.06, Math.min(1, speed / RUN_SPEED)));
+    } else {
+      this.audio.stopWading();
+    }
 
     // the torch dies as something gets close (full dark at touch range);
     // befriended companions no longer scare it
