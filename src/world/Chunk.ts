@@ -356,7 +356,7 @@ export function generateChunk(seed: number, cx: number, cz: number): ChunkData {
         }
       }
       wallRuns(rng, c.wallsV, c.wallsH, randInt(rng, 1, 3), 0.4);
-      const basins = randInt(rng, 1, 3);
+      const basins = randInt(rng, 2, 4);
       for (let b = 0; b < basins; b++) {
         const w = randInt(rng, 4, 9);
         const h = randInt(rng, 4, 9);
@@ -452,9 +452,12 @@ export function generateChunk(seed: number, cx: number, cz: number): ChunkData {
     [wx0 + (i + 0.5) * CELL, wz0 + (j + 0.5) * CELL];
 
   // ---- light fixtures ----
-  let lightStep = 3, brokenP = 0.1, flickerP = 0.14;
-  if (biome === BiomeId.Level2) { lightStep = 4; brokenP = 0.22; flickerP = 0.28; }
-  if (biome === BiomeId.Level37) { lightStep = 5; brokenP = 0.12; flickerP = 0.18; }
+  // Level 0 keeps a dense, almost fully working ceiling grid — the horror is
+  // the even fluorescent light, not the dark.
+  let lightStep = 2, brokenP = 0.03, flickerP = 0.07;
+  // Level 2 lives on the gap between lamps; the poolrooms are lit end to end.
+  if (biome === BiomeId.Level2) { lightStep = 4; brokenP = 0.3; flickerP = 0.3; }
+  if (biome === BiomeId.Level37) { lightStep = 3; brokenP = 0.05; flickerP = 0.08; }
   if (biome === BiomeId.Level7) { lightStep = 5; brokenP = 0.55; flickerP = 0.3; }
   const lightOff = randInt(rng, 0, lightStep);
   for (let j = lightOff; j < N; j += lightStep) {

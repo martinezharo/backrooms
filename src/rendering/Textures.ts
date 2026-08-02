@@ -32,17 +32,29 @@ function grain(ctx: CanvasRenderingContext2D, size: number, rng: () => number, a
   ctx.putImageData(img, 0, 0);
 }
 
+/**
+ * Blotches, drawn nine times across the wrap offsets so a blob that runs off
+ * one edge comes back in on the other. Without this every stain is chopped at
+ * the canvas border and the repeat reads as a visible grid on floors.
+ */
 function stains(ctx: CanvasRenderingContext2D, size: number, rng: () => number, count: number, color: string, maxR: number) {
   ctx.save();
   for (let i = 0; i < count; i++) {
     const x = rng() * size;
     const y = rng() * size;
     const r = (0.3 + rng() * 0.7) * maxR;
-    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-    g.addColorStop(0, color);
-    g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    for (let oy = -1; oy <= 1; oy++) {
+      for (let ox = -1; ox <= 1; ox++) {
+        const bx = x + ox * size;
+        const by = y + oy * size;
+        if (bx + r < 0 || bx - r > size || by + r < 0 || by - r > size) continue;
+        const g = ctx.createRadialGradient(bx, by, 0, bx, by, r);
+        g.addColorStop(0, color);
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(bx - r, by - r, r * 2, r * 2);
+      }
+    }
   }
   ctx.restore();
 }
@@ -53,17 +65,17 @@ function wallpaper(): HTMLCanvasElement {
   const [c, ctx] = makeCanvas(size);
   const rng = mulberry32(101);
 
-  ctx.fillStyle = '#b3a04f';
+  ctx.fillStyle = '#cabd78';
   ctx.fillRect(0, 0, size, size);
-  // vertical stripe pattern
+  // barely-there vertical stripes: the pattern should only surface up close
   for (let x = 0; x < size; x += 32) {
-    ctx.fillStyle = x % 64 === 0 ? '#ab984a' : '#b8a553';
+    ctx.fillStyle = x % 64 === 0 ? '#c8bb77' : '#ccbf7b';
     ctx.fillRect(x, 0, 32, size);
-    ctx.fillStyle = 'rgba(140,120,50,0.35)';
+    ctx.fillStyle = 'rgba(175,160,100,0.14)';
     ctx.fillRect(x, 0, 2, size);
   }
   // subtle damask-ish dots
-  ctx.fillStyle = 'rgba(125,108,46,0.4)';
+  ctx.fillStyle = 'rgba(182,167,104,0.35)';
   for (let y = 16; y < size; y += 42) {
     for (let x = 16; x < size; x += 32) {
       ctx.beginPath();
@@ -71,15 +83,16 @@ function wallpaper(): HTMLCanvasElement {
       ctx.fill();
     }
   }
-  stains(ctx, size, rng, 14, 'rgba(70,58,20,0.18)', 90);
-  stains(ctx, size, rng, 5, 'rgba(40,32,10,0.22)', 130);
-  grain(ctx, size, rng, 26, 0.8);
+  // grime stays faint — flat, evenly lit walls are what makes the space wrong
+  stains(ctx, size, rng, 9, 'rgba(120,105,55,0.10)', 90);
+  stains(ctx, size, rng, 4, 'rgba(95,82,40,0.12)', 130);
+  grain(ctx, size, rng, 12, 0.8);
 
   // baseboard strip (bottom of the texture = bottom of the wall)
-  const bb = Math.floor(size * 0.055);
-  ctx.fillStyle = '#5e5430';
+  const bb = Math.floor(size * 0.05);
+  ctx.fillStyle = '#a89a5e';
   ctx.fillRect(0, size - bb, size, bb);
-  ctx.fillStyle = 'rgba(255,240,180,0.16)';
+  ctx.fillStyle = 'rgba(255,248,210,0.22)';
   ctx.fillRect(0, size - bb, size, 3);
   return c;
 }
@@ -89,19 +102,19 @@ function carpet(): HTMLCanvasElement {
   const size = 512;
   const [c, ctx] = makeCanvas(size);
   const rng = mulberry32(202);
-  ctx.fillStyle = '#8a7a3e';
+  ctx.fillStyle = '#95895f';
   ctx.fillRect(0, 0, size, size);
   // fiber speckle
   for (let i = 0; i < 26000; i++) {
     const x = rng() * size;
     const y = rng() * size;
     const v = rng();
-    ctx.fillStyle = v < 0.5 ? 'rgba(60,52,24,0.5)' : 'rgba(168,150,80,0.4)';
+    ctx.fillStyle = v < 0.5 ? 'rgba(112,101,68,0.45)' : 'rgba(176,164,124,0.38)';
     ctx.fillRect(x, y, 1.6, 1.6);
   }
-  stains(ctx, size, rng, 10, 'rgba(45,38,16,0.30)', 110); // damp patches
-  stains(ctx, size, rng, 6, 'rgba(30,26,12,0.35)', 60);
-  grain(ctx, size, rng, 18, 0.8);
+  stains(ctx, size, rng, 8, 'rgba(112,100,64,0.18)', 110); // damp patches
+  stains(ctx, size, rng, 5, 'rgba(90,80,50,0.20)', 60);
+  grain(ctx, size, rng, 12, 0.8);
   return c;
 }
 
@@ -110,40 +123,68 @@ function ceilingTiles(): HTMLCanvasElement {
   const size = 512;
   const [c, ctx] = makeCanvas(size);
   const rng = mulberry32(303);
-  ctx.fillStyle = '#b0a888';
+  ctx.fillStyle = '#d5d0b6';
   ctx.fillRect(0, 0, size, size);
   for (let i = 0; i < 9000; i++) {
-    ctx.fillStyle = `rgba(90,84,60,${0.12 + rng() * 0.2})`;
+    ctx.fillStyle = `rgba(160,154,128,${0.12 + rng() * 0.18})`;
     ctx.fillRect(rng() * size, rng() * size, 2, 2);
   }
   // tile grid
-  ctx.strokeStyle = 'rgba(70,64,44,0.85)';
+  ctx.strokeStyle = 'rgba(150,144,118,0.75)';
   ctx.lineWidth = 4;
   for (let p = 0; p <= size; p += 128) {
     ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, size); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(size, p); ctx.stroke();
   }
-  stains(ctx, size, rng, 8, 'rgba(95,75,30,0.3)', 100); // water damage
-  grain(ctx, size, rng, 14, 0.8);
+  stains(ctx, size, rng, 6, 'rgba(150,125,65,0.16)', 100); // water damage
+  grain(ctx, size, rng, 9, 0.8);
   return c;
 }
 
-/** Raw concrete for Level 2. */
+/**
+ * Poured concrete for Level 2 — warm damp grey with the horizontal seams the
+ * formwork left behind, water running down from every joint.
+ */
 function concrete(): HTMLCanvasElement {
   const size = 512;
   const [c, ctx] = makeCanvas(size);
   const rng = mulberry32(404);
-  ctx.fillStyle = '#6e6a62';
+  ctx.fillStyle = '#7b746a';
   ctx.fillRect(0, 0, size, size);
   for (let i = 0; i < 18000; i++) {
-    const v = 90 + rng() * 50;
-    ctx.fillStyle = `rgba(${v},${v},${v - 6},${0.18 + rng() * 0.2})`;
+    const v = 105 + rng() * 45;
+    ctx.fillStyle = `rgba(${v},${v - 4},${v - 12},${0.16 + rng() * 0.18})`;
     ctx.fillRect(rng() * size, rng() * size, 2.5, 2.5);
   }
+  // form-board seams: the wall was poured in lifts and every lift shows
+  for (let y = 0; y < size; y += 128) {
+    ctx.fillStyle = 'rgba(52,48,42,0.42)';
+    ctx.fillRect(0, y, size, 2);
+    ctx.fillStyle = 'rgba(150,144,132,0.20)';
+    ctx.fillRect(0, y + 2, size, 2);
+    // tie-rod holes punched along the seam
+    for (let x = 24 + (rng() * 40 | 0); x < size; x += 96 + rng() * 40) {
+      ctx.fillStyle = 'rgba(46,42,36,0.55)';
+      ctx.beginPath();
+      ctx.arc(x, y + 12, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // damp running down from the seams — vertical, always downward
+  for (let i = 0; i < 26; i++) {
+    const x = rng() * size;
+    const y0 = (rng() * 4 | 0) * 128;
+    const len = 40 + rng() * 150;
+    const g = ctx.createLinearGradient(0, y0, 0, y0 + len);
+    g.addColorStop(0, 'rgba(48,44,36,0.30)');
+    g.addColorStop(1, 'rgba(48,44,36,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y0, 3 + rng() * 12, len);
+  }
   // cracks
-  ctx.strokeStyle = 'rgba(38,36,32,0.5)';
+  ctx.strokeStyle = 'rgba(48,44,38,0.45)';
   ctx.lineWidth = 1.4;
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 7; i++) {
     let x = rng() * size;
     let y = rng() * size;
     ctx.beginPath();
@@ -155,35 +196,39 @@ function concrete(): HTMLCanvasElement {
     }
     ctx.stroke();
   }
-  stains(ctx, size, rng, 12, 'rgba(30,30,28,0.3)', 120);
-  stains(ctx, size, rng, 6, 'rgba(50,42,20,0.25)', 70); // rust runs
-  grain(ctx, size, rng, 22, 1);
+  stains(ctx, size, rng, 10, 'rgba(40,38,32,0.26)', 120);
+  stains(ctx, size, rng, 7, 'rgba(96,62,26,0.22)', 70); // rust bleeding out of the rebar
+  grain(ctx, size, rng, 20, 1);
   return c;
 }
 
-/** Pool tiles — small squares, grout, grime. Tinted per use (wall/floor). */
-function poolTile(base: string, alt: string): HTMLCanvasElement {
+/**
+ * Square tiles — grout, a highlight along the top edge, and grime that pools
+ * in the joints. `grime` tints the dirt: pale for the poolrooms, black-green
+ * for what is under the flood.
+ */
+function poolTile(base: string, alt: string, grout: string, grime: string, grimeAmount: number): HTMLCanvasElement {
   const size = 512;
   const [c, ctx] = makeCanvas(size);
   const rng = mulberry32(505);
-  const t = 32; // tile pixel size
+  const t = 64; // 8 tiles across the map — 25 cm squares at one repeat per cell.
+  // Finer than that and the grid aliases into rainbow moiré at grazing angles.
   for (let y = 0; y < size; y += t) {
     for (let x = 0; x < size; x += t) {
-      ctx.fillStyle = rng() < 0.93 ? base : alt;
+      ctx.fillStyle = rng() < 0.9 ? base : alt;
       ctx.fillRect(x, y, t, t);
-      ctx.fillStyle = 'rgba(255,255,255,0.07)';
-      ctx.fillRect(x + 2, y + 2, t - 4, 3);
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(x + 3, y + 3, t - 6, 4);
     }
   }
-  ctx.strokeStyle = 'rgba(60,72,68,0.9)';
-  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = grout;
+  ctx.lineWidth = 3.5;
   for (let p = 0; p <= size; p += t) {
     ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, size); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(size, p); ctx.stroke();
   }
-  stains(ctx, size, rng, 12, 'rgba(40,70,55,0.30)', 110); // algae grime
-  stains(ctx, size, rng, 6, 'rgba(20,30,26,0.3)', 60);
-  grain(ctx, size, rng, 12, 0.8);
+  stains(ctx, size, rng, grimeAmount, grime, 110);
+  grain(ctx, size, rng, 10, 0.8);
   return c;
 }
 
@@ -393,8 +438,9 @@ export interface WorldMaterials {
   carpet: THREE.MeshStandardMaterial;
   ceiling: THREE.MeshStandardMaterial;
   concrete: THREE.MeshStandardMaterial;    // L2 walls/floors/ceiling
-  tileWall: THREE.MeshStandardMaterial;    // L37/L7 walls
-  tileFloor: THREE.MeshStandardMaterial;
+  tileWall: THREE.MeshStandardMaterial;    // L37 poolroom walls
+  tileFloor: THREE.MeshStandardMaterial;   // L37 poolroom floors + basins
+  deepTile: THREE.MeshStandardMaterial;    // L7, the same tile gone black
   metal: THREE.MeshStandardMaterial;
   fixtureOn: THREE.MeshStandardMaterial;   // glowing lamp panel
   fixtureOff: THREE.MeshStandardMaterial;
@@ -407,11 +453,16 @@ export function getWorldMaterials(): WorldMaterials {
   if (cached) return cached;
 
   const wallTex = toTexture(wallpaper());
-  const carpetTex = toTexture(carpet(), 1, 1);
+  // one carpet tile spans 4 m (two cells) — the coarse damp patches repeat far
+  // enough apart that the eye stops finding the seam
+  const carpetTex = toTexture(carpet(), 0.5, 0.5);
   const ceilTex = toTexture(ceilingTiles());
   const concTex = toTexture(concrete());
-  const tileWallTex = toTexture(poolTile('#b9cfc6', '#7fa89b'));
-  const tileFloorTex = toTexture(poolTile('#a8c4ba', '#6e9a8c'));
+  // poolrooms: pale tile that has been under water and humidity for years —
+  // dirty grout, algae shadowing the corners, nothing sterile about it
+  const tileWallTex = toTexture(poolTile('#c9d0c4', '#b2c1ba', 'rgba(146,154,144,0.55)', 'rgba(96,122,104,0.22)', 13));
+  const tileFloorTex = toTexture(poolTile('#bcc4b8', '#a6b5ac', 'rgba(136,144,134,0.55)', 'rgba(88,112,96,0.26)', 15));
+  const deepTileTex = toTexture(poolTile('#5c6b64', '#465550', 'rgba(44,54,50,0.6)', 'rgba(18,32,26,0.34)', 14));
   const metalTex = toTexture(metal());
 
   cached = {
@@ -421,7 +472,8 @@ export function getWorldMaterials(): WorldMaterials {
     concrete: new THREE.MeshStandardMaterial({ map: concTex, roughness: 0.97, metalness: 0 }),
     tileWall: new THREE.MeshStandardMaterial({ map: tileWallTex, roughness: 0.35, metalness: 0.05 }),
     tileFloor: new THREE.MeshStandardMaterial({ map: tileFloorTex, roughness: 0.3, metalness: 0.05 }),
-    metal: new THREE.MeshStandardMaterial({ map: metalTex, roughness: 0.55, metalness: 0.7 }),
+    deepTile: new THREE.MeshStandardMaterial({ map: deepTileTex, roughness: 0.45, metalness: 0.05 }),
+    metal: new THREE.MeshStandardMaterial({ map: metalTex, roughness: 0.72, metalness: 0.55 }),
     fixtureOn: new THREE.MeshStandardMaterial({
       color: 0x202018,
       emissive: 0xfff4cf,

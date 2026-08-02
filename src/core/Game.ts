@@ -15,7 +15,7 @@ import { Lighting } from '../rendering/Lighting';
 import { PostFX } from '../rendering/PostFX';
 import { updateWater } from '../rendering/Water';
 import { Escape } from '../rendering/Escape';
-import { BiomeId, biomeForChunk } from '../world/Biomes';
+import { BiomeId, BIOMES, biomeForChunk } from '../world/Biomes';
 import { FUSE_COUNT, objectiveLayout } from '../world/Objective';
 import { PortalManager } from '../world/Portal';
 import { World } from '../world/World';
@@ -69,8 +69,8 @@ export class Game {
   private expectUnlock = false;
   private lastStingerAt = -99;
   private lastWhisperAt = -99;
-  private fogColor = new THREE.Color(0x2c2715);
-  private fogTargetColor = new THREE.Color(0x2c2715);
+  private fogColor = new THREE.Color(BIOMES[BiomeId.Level0].fogColor);
+  private fogTargetColor = new THREE.Color(BIOMES[BiomeId.Level0].fogColor);
   private fog: THREE.FogExp2;
   private message = '';
   private messageTimer = 0;
@@ -100,9 +100,9 @@ export class Game {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = this.quality.mobile ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 1.0;
 
-    this.fog = new THREE.FogExp2(this.fogColor.getHex(), 0.05);
+    this.fog = new THREE.FogExp2(this.fogColor.getHex(), BIOMES[BiomeId.Level0].fogDensity);
     this.scene.fog = this.fog;
     this.scene.background = this.fogColor;
 
@@ -471,6 +471,8 @@ export class Game {
     this.fogColor.lerp(this.fogTargetColor, Math.min(1, dt * 1.2));
     this.fog.color.copy(this.fogColor);
     this.fog.density += (biome.fogDensity - this.fog.density) * Math.min(1, dt * 1.2);
+    this.postfx.setVignette(biome.vignette);
+    this.postfx.setWaterTint(biome.underwaterTint);
     this.hud.announceBiome(biome.name);
     this.audio.setAmbience(biome.ambienceId);
 

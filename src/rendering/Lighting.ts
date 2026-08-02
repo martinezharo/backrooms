@@ -2,7 +2,7 @@
 // nearest the player; everything else glows via emissive material + bloom.
 
 import * as THREE from 'three';
-import { BIOMES } from '../world/Biomes';
+import { BIOMES, BiomeId } from '../world/Biomes';
 import { LightFixture } from '../world/Chunk';
 import { flickerOn, World } from '../world/World';
 import { CHUNK } from '../core/constants';
@@ -46,11 +46,12 @@ export class Lighting {
   constructor(scene: THREE.Scene, world: World, quality: RenderQuality) {
     this.world = world;
     for (let i = 0; i < POOL_SIZE; i++) {
-      const l = new THREE.PointLight(0xfff0bb, 0, 15, 1.8);
+      const l = new THREE.PointLight(0xfff6d8, 0, 18, 1.35);
       scene.add(l);
       this.pool.push(l);
     }
-    this.ambient = new THREE.AmbientLight(0x6b6244, 0.5);
+    const start = BIOMES[BiomeId.Level0];
+    this.ambient = new THREE.AmbientLight(start.ambientColor, start.ambientIntensity);
     scene.add(this.ambient);
 
     this.flashlight = new THREE.SpotLight(0xfff6e0, 0, 26, Math.PI / 5.5, 0.45, 1.4);

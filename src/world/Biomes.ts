@@ -20,6 +20,10 @@ export interface BiomeDef {
   ambientIntensity: number;
   lightColor: number;
   lightIntensity: number;
+  /** post-process vignette strength; low keeps the frame flat and evenly lit */
+  vignette: number;
+  /** colour the frame is multiplied by while the camera is submerged */
+  underwaterTint: number;
   /** water surface height, or null when the biome is dry */
   waterLevel: number | null;
   ambienceId: 'hum' | 'tunnel' | 'pool' | 'deep';
@@ -29,26 +33,33 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
   [BiomeId.Level0]: {
     id: BiomeId.Level0,
     name: 'LEVEL 0',
-    ceiling: 3.0,
-    fogColor: 0x2c2715,
-    fogDensity: 0.05,
-    ambientColor: 0x6b6244,
-    ambientIntensity: 0.55,
-    lightColor: 0xfff0bb,
-    lightIntensity: 26,
+    ceiling: 3.1,
+    // Liminal haze: distance dissolves into pale yellow light, never darkness.
+    fogColor: 0x7c7145,
+    fogDensity: 0.022,
+    ambientColor: 0x9c9163,
+    ambientIntensity: 0.82,
+    lightColor: 0xfff2c8,
+    lightIntensity: 7.5,
+    vignette: 0.18,
+    underwaterTint: 0x74d9bf,
     waterLevel: null,
     ambienceId: 'hum',
   },
   [BiomeId.Level2]: {
     id: BiomeId.Level2,
     name: 'LEVEL 2',
-    ceiling: 2.6,
-    fogColor: 0x0d0b08,
-    fogDensity: 0.085,
-    ambientColor: 0x3a3228,
-    ambientIntensity: 0.35,
-    lightColor: 0xffc890,
-    lightIntensity: 18,
+    ceiling: 2.45,
+    // Not a void: the haze holds the sodium light so the tunnel fades out
+    // ahead of you instead of ending in black.
+    fogColor: 0x271d12,
+    fogDensity: 0.05,
+    ambientColor: 0x685740,
+    ambientIntensity: 0.8,
+    lightColor: 0xffb066,
+    lightIntensity: 13,
+    vignette: 0.42,
+    underwaterTint: 0x74d9bf,
     waterLevel: null,
     ambienceId: 'tunnel',
   },
@@ -56,12 +67,16 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
     id: BiomeId.Level37,
     name: 'LEVEL 37',
     ceiling: 4.6,
-    fogColor: 0x122421,
-    fogDensity: 0.045,
-    ambientColor: 0x4d6b62,
-    ambientIntensity: 0.5,
-    lightColor: 0xc8f0e0,
-    lightIntensity: 24,
+    // The poolrooms are bright, humid and clean — the dread is that they are
+    // endless, not that they are dark. Everything reads as bounced light.
+    fogColor: 0x8ea8a5,
+    fogDensity: 0.042,
+    ambientColor: 0xb3cac6,
+    ambientIntensity: 0.85,
+    lightColor: 0xdffbff,
+    lightIntensity: 8.5,
+    vignette: 0.3,
+    underwaterTint: 0x8ef0ea,
     waterLevel: -0.35,
     ambienceId: 'pool',
   },
@@ -74,7 +89,9 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
     ambientColor: 0x1c2c38,
     ambientIntensity: 0.3,
     lightColor: 0x96b8d0,
-    lightIntensity: 10,
+    lightIntensity: 7,
+    vignette: 0.68,
+    underwaterTint: 0x5ba896,
     waterLevel: 1.75,
     ambienceId: 'deep',
   },

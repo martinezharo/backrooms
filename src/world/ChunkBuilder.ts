@@ -31,13 +31,39 @@ function vendGlass(): THREE.MeshStandardMaterial {
   return vendGlassMat;
 }
 
+/**
+ * Re-map a box's UVs from per-face 0..1 to world space, so one texture repeat
+ * covers `metres` in every direction. Without it a tile texture is stretched
+ * to whatever the wall happens to measure and the squares come out oblong.
+ * BoxGeometry lays its faces out +x, -x, +y, -y, +z, -z, four vertices each.
+ */
+function worldUvs(g: THREE.BufferGeometry, w: number, h: number, d: number, metres: number): void {
+  const uv = g.getAttribute('uv') as THREE.BufferAttribute;
+  const spans: [number, number][] = [
+    [d, h], [d, h], // ±x faces: u runs along z, v along y
+    [w, d], [w, d], // ±y faces: u along x, v along z
+    [w, h], [w, h], // ±z faces: u along x, v along y
+  ];
+  for (let f = 0; f < 6; f++) {
+    const [su, sv] = spans[f];
+    for (let v = 0; v < 4; v++) {
+      const i = f * 4 + v;
+      uv.setXY(i, uv.getX(i) * (su / metres), uv.getY(i) * (sv / metres));
+    }
+  }
+  uv.needsUpdate = true;
+}
+
 function pushBox(
   buckets: GeoBuckets, key: string,
   w: number, h: number, d: number,
   x: number, y: number, z: number,
   rotY = 0,
+  /** metres covered by one texture repeat; omit to stretch the map per face */
+  uvMetres = 0,
 ) {
   const g = new THREE.BoxGeometry(w, h, d);
+  if (uvMetres) worldUvs(g, w, h, d, uvMetres);
   if (rotY) g.rotateY(rotY);
   g.translate(x, y, z);
   (buckets[key] ??= []).push(g);
@@ -103,7 +129,7 @@ function biomeMats(b: BiomeId): BiomeMats {
     case BiomeId.Level0: return { wall: 'wall', floor: 'carpet', ceil: 'ceiling' };
     case BiomeId.Level2: return { wall: 'concrete', floor: 'concrete', ceil: 'concrete' };
     case BiomeId.Level37: return { wall: 'tileWall', floor: 'tileFloor', ceil: 'tileWall' };
-    case BiomeId.Level7: return { wall: 'concrete', floor: 'tileFloor', ceil: 'concrete' };
+    case BiomeId.Level7: return { wall: 'concrete', floor: 'deepTile', ceil: 'concrete' };
   }
 }
 
@@ -112,12 +138,18 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
   const matByKey: Record<string, THREE.Material> = {
     wall: mats.wall, carpet: mats.carpet, ceiling: mats.ceiling,
     concrete: mats.concrete, tileWall: mats.tileWall, tileFloor: mats.tileFloor,
+    deepTile: mats.deepTile,
     metal: mats.metal, frame: mats.fixtureFrame,
     panelOn: mats.fixtureOn, panelOff: mats.fixtureOff,
     vendGlass: vendGlass(),
   };
   getGraffitiMaterials().forEach((m, i) => { matByKey[`graffiti${i}`] = m; });
   const bm = biomeMats(c.biome);
+  // Poolroom tile must read as the same square grid on every surface, so its
+  // walls repeat once per cell exactly like the floor does. The other biomes
+  // stretch their map per wall face, which is what their textures expect (the
+  // Level 0 wallpaper carries its baseboard in the bottom of the canvas).
+  const wallUv = c.biome === BiomeId.Level37 ? CELL : 0;
   const buckets: GeoBuckets = {};
   const floorBatches: Record<string, QuadBatch> = {};
   const wx0 = c.cx * CHUNK;
@@ -151,10 +183,10 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
         if (nf <= f + 0.01) continue;
         const h = nf - f;
         const cy = f + h / 2;
-        if (dir === 0) pushBox(buckets, 'tileWall', 0.06, h, CELL, wx0 + i * CELL + 0.03, cy, wz0 + (j + 0.5) * CELL);
-        if (dir === 1) pushBox(buckets, 'tileWall', 0.06, h, CELL, wx0 + (i + 1) * CELL - 0.03, cy, wz0 + (j + 0.5) * CELL);
-        if (dir === 2) pushBox(buckets, 'tileWall', CELL, h, 0.06, wx0 + (i + 0.5) * CELL, cy, wz0 + j * CELL + 0.03);
-        if (dir === 3) pushBox(buckets, 'tileWall', CELL, h, 0.06, wx0 + (i + 0.5) * CELL, cy, wz0 + (j + 1) * CELL - 0.03);
+        if (dir === 0) pushBox(buckets, 'tileWall', 0.06, h, CELL, wx0 + i * CELL + 0.03, cy, wz0 + (j + 0.5) * CELL, 0, CELL);
+        if (dir === 1) pushBox(buckets, 'tileWall', 0.06, h, CELL, wx0 + (i + 1) * CELL - 0.03, cy, wz0 + (j + 0.5) * CELL, 0, CELL);
+        if (dir === 2) pushBox(buckets, 'tileWall', CELL, h, 0.06, wx0 + (i + 0.5) * CELL, cy, wz0 + j * CELL + 0.03, 0, CELL);
+        if (dir === 3) pushBox(buckets, 'tileWall', CELL, h, 0.06, wx0 + (i + 0.5) * CELL, cy, wz0 + (j + 1) * CELL - 0.03, 0, CELL);
       }
     }
   }
@@ -177,11 +209,11 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
           c.solid[idx(lineX - 1, j)] ? 0 : c.floor[idx(lineX - 1, j)],
           c.solid[idx(lineX, j)] ? 0 : c.floor[idx(lineX, j)],
         );
-        pushBox(buckets, bm.wall, WALL_THICKNESS, top - fl, CELL + WALL_THICKNESS, x, fl + (top - fl) / 2, z);
+        pushBox(buckets, bm.wall, WALL_THICKNESS, top - fl, CELL + WALL_THICKNESS, x, fl + (top - fl) / 2, z, 0, wallUv);
       } else if (isBorder && Math.abs(c.ceil - ceilW) > 0.01) {
         // lintel sealing the gap between mismatched ceilings above a doorway
         const lo = Math.min(c.ceil, ceilW) - 0.45;
-        pushBox(buckets, bm.wall, WALL_THICKNESS, top - lo, CELL + WALL_THICKNESS, x, lo + (top - lo) / 2, z);
+        pushBox(buckets, bm.wall, WALL_THICKNESS, top - lo, CELL + WALL_THICKNESS, x, lo + (top - lo) / 2, z, 0, wallUv);
       }
     }
   }
@@ -197,10 +229,10 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
           c.solid[idx(i, lineZ - 1)] ? 0 : c.floor[idx(i, lineZ - 1)],
           c.solid[idx(i, lineZ)] ? 0 : c.floor[idx(i, lineZ)],
         );
-        pushBox(buckets, bm.wall, CELL + WALL_THICKNESS, top - fl, WALL_THICKNESS, x, fl + (top - fl) / 2, z);
+        pushBox(buckets, bm.wall, CELL + WALL_THICKNESS, top - fl, WALL_THICKNESS, x, fl + (top - fl) / 2, z, 0, wallUv);
       } else if (isBorder && Math.abs(c.ceil - ceilN) > 0.01) {
         const lo = Math.min(c.ceil, ceilN) - 0.45;
-        pushBox(buckets, bm.wall, CELL + WALL_THICKNESS, top - lo, WALL_THICKNESS, x, lo + (top - lo) / 2, z);
+        pushBox(buckets, bm.wall, CELL + WALL_THICKNESS, top - lo, WALL_THICKNESS, x, lo + (top - lo) / 2, z, 0, wallUv);
       }
     }
   }
@@ -209,7 +241,7 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
   for (let j = 0; j < N; j++) {
     for (let i = 0; i < N; i++) {
       if (!c.solid[idx(i, j)]) continue;
-      pushBox(buckets, bm.wall, CELL, c.ceil, CELL, wx0 + (i + 0.5) * CELL, c.ceil / 2, wz0 + (j + 0.5) * CELL);
+      pushBox(buckets, bm.wall, CELL, c.ceil, CELL, wx0 + (i + 0.5) * CELL, c.ceil / 2, wz0 + (j + 0.5) * CELL, 0, wallUv);
     }
   }
 
@@ -237,15 +269,53 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
     pushCylinder(buckets, 'metal', 0.06, 0.025, 'y', px3, t.y + 0.06, pz3);
   }
 
-  // ---- pipes along the ceiling (Level 2) ----
+  // ---- pipe runs (Level 2) ----
+  // Pipes follow the tunnels instead of a random lane: a corridor is a row or
+  // column that runs clear through the chunk, so the run never buries itself
+  // in concrete and always arrives at the neighbouring chunk's corridor.
   if (c.biome === BiomeId.Level2) {
-    const prand = (n: number) => (Math.abs(Math.sin((c.cx * 37.7 + c.cz * 91.3 + n) * 12.9)) * N) | 0;
-    for (let p = 0; p < 3; p++) {
-      const alongX = p % 2 === 0;
-      const lane = prand(p) % N;
-      const y = c.ceil - 0.22 - p * 0.14;
-      if (alongX) pushCylinder(buckets, 'metal', 0.07, CHUNK, 'x', wx0 + CHUNK / 2, y, wz0 + lane * CELL + 0.45);
-      else pushCylinder(buckets, 'metal', 0.07, CHUNK, 'z', wx0 + lane * CELL + 0.45, y, wz0 + CHUNK / 2);
+    const rowClear = (j: number) => {
+      for (let i = 0; i < N; i++) if (c.solid[idx(i, j)]) return false;
+      return true;
+    };
+    const colClear = (i: number) => {
+      for (let j = 0; j < N; j++) if (c.solid[idx(i, j)]) return false;
+      return true;
+    };
+    /** A bundle of pipes hung along one corridor, with brackets every 4 m. */
+    const runPipes = (alongX: boolean, lane: number) => {
+      const mid = (alongX ? wx0 : wz0) + CHUNK / 2;
+      const cross = (alongX ? wz0 : wx0) + (lane + 0.5) * CELL;
+      const axis = alongX ? 'x' : 'z';
+      const at = (off: number, y: number, r: number) => {
+        const x = alongX ? mid : cross + off;
+        const z = alongX ? cross + off : mid;
+        pushCylinder(buckets, 'metal', r, CHUNK, axis, x, y, z);
+      };
+      // tucked into the corner where wall meets ceiling, out of the sightline
+      at(-0.8, c.ceil - 0.17, 0.075);
+      at(-0.63, c.ceil - 0.19, 0.045);
+      at(0.82, c.ceil - 0.2, 0.055);
+      for (let s = 0; s < 8; s++) {
+        const along = (alongX ? wx0 : wz0) + (s + 0.5) * (CHUNK / 8);
+        const x = alongX ? along : cross - 0.72;
+        const z = alongX ? cross - 0.72 : along;
+        pushBox(buckets, 'frame', alongX ? 0.05 : 0.3, 0.07, alongX ? 0.3 : 0.05, x, c.ceil - 0.06, z);
+      }
+    };
+    // Only every other clear lane gets a run: in the open rooms every lane is
+    // clear, and piping all of them turns the ceiling into a grid.
+    let lastRow = -9;
+    for (let j = 0; j < N; j++) {
+      if (!rowClear(j) || j - lastRow < 3) continue;
+      runPipes(true, j);
+      lastRow = j;
+    }
+    let lastCol = -9;
+    for (let i = 0; i < N; i++) {
+      if (!colClear(i) || i - lastCol < 3) continue;
+      runPipes(false, i);
+      lastCol = i;
     }
   }
 
@@ -334,7 +404,7 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
       const d = (maxJ - minJ + 1) * CELL;
       const g = new THREE.PlaneGeometry(w, d, 12, 12);
       g.rotateX(-Math.PI / 2);
-      const mesh = new THREE.Mesh(g, getWaterMaterial());
+      const mesh = new THREE.Mesh(g, getWaterMaterial(c.biome === BiomeId.Level37 ? 'pool' : 'deep'));
       mesh.position.set(wx0 + minI * CELL + w / 2, c.waterY, wz0 + minJ * CELL + d / 2);
       mesh.renderOrder = 2;
       group.add(mesh);
