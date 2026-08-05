@@ -1,7 +1,8 @@
 // Grid inventory: 5x4 slots, items occupy rectangular footprints, 10 weight max.
 
 import { INV_COLS, INV_ROWS, MAX_CARRY_WEIGHT } from '../core/constants';
-import { ItemInstance } from './Items';
+import { InventoryState } from '../core/Save';
+import { ItemInstance, reviveItem, snapshotItem } from './Items';
 
 export interface PlacedItem {
   item: ItemInstance;
@@ -81,6 +82,27 @@ export class Inventory {
   clear(): void {
     this.items.length = 0;
     this.equipped = null;
+    this.onChanged?.();
+  }
+
+  saveState(): InventoryState {
+    const equipped = this.items.findIndex((p) => p.item === this.equipped);
+    return {
+      items: this.items.map((p) => ({ item: snapshotItem(p.item), col: p.col, row: p.row })),
+      equipped: equipped < 0 ? null : equipped,
+    };
+  }
+
+  loadState(s: InventoryState): void {
+    this.items = [];
+    this.equipped = null;
+    for (let i = 0; i < s.items.length; i++) {
+      const e = s.items[i];
+      const item = reviveItem(e.item);
+      if (!item) continue; // an item this build dropped from the catalog
+      this.items.push({ item, col: e.col, row: e.row });
+      if (s.equipped === i) this.equipped = item;
+    }
     this.onChanged?.();
   }
 }

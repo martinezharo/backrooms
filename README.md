@@ -54,6 +54,21 @@ the door is the loudest part of the run.
 
 Records (escapes, descents, best time, deepest) persist in `localStorage`.
 
+## Putting it down
+
+A run autosaves every 20 seconds, on pause and when the tab goes away, so the
+landing page can offer **CONTINUE** instead of DESCEND. The pause menu says so
+out loud and has a **SAVE & QUIT** that drops you back on the landing page with
+the run waiting — closing the tab does the same thing, quietly. The maze itself is never
+written down — it regenerates from the seed — so a checkpoint is under a
+kilobyte of `localStorage`: where you stood, what's in the bag and what you did
+to the floor (fuses pulled, items dropped, machines drained, the door fed,
+monsters hugged). Hostile entities aren't saved; the level sends more.
+
+The checkpoint is for putting the game down, not for undoing it: dying or
+stepping through the portal wipes it, and starting a fresh descent rolls a new
+seed. A `?seed=` in the URL always wins over the saved one.
+
 ## The world
 
 Infinite, chunk-streamed, deterministic from the seed. Four levels blend into
@@ -178,6 +193,7 @@ node scripts/mobile.mjs   # phone viewport: drives the stick, look pad, buttons
 node scripts/tour.mjs     # screenshots all four levels to /tmp
 node scripts/inspect.mjs  # probes world internals (taps, lights, water, enemies)
 node scripts/escape.mjs   # runs a whole extraction: portal, fuses, the fall
+node scripts/save.mjs     # checkpoint round trip: quit, CONTINUE, compare state
 ```
 
 `scripts/escape.mjs` takes an optional seed and shoots the portal (dormant and

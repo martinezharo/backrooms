@@ -3,6 +3,7 @@
 // the stalking AI is what keeps them discreet.
 
 import * as THREE from 'three';
+import { FriendState } from '../core/Save';
 import { BiomeId } from '../world/Biomes';
 import { World } from '../world/World';
 import { Enemy, EnemyContext } from './Enemy';
@@ -25,6 +26,11 @@ const WEIGHTS: Record<BiomeId, [EnemyCtor, number][]> = {
   [BiomeId.Level2]: [[Hound, 0.4], [Smiler, 0.35], [SkinStealer, 0.25]],
   [BiomeId.Level37]: [[SkinStealer, 0.5], [Smiler, 0.3], [Hound, 0.2]],
   [BiomeId.Level7]: [[Smiler, 0.7], [SkinStealer, 0.3]],
+};
+
+/** Only friends are ever restored, so the save keeps a name, not a class. */
+const BY_VOICE: Record<string, EnemyCtor> = {
+  smiler: Smiler, stealer: SkinStealer, hound: Hound, partygoer: Partygoer,
 };
 
 export class Spawner {
@@ -145,6 +151,29 @@ export class Spawner {
       danger = Math.max(danger, proximity * weight);
     }
     return danger;
+  }
+
+  /**
+   * Hostiles are never saved — they are a trickle around the player and the
+   * floor is happy to send more. The ones you hugged are yours to keep.
+   */
+  saveState(): FriendState[] {
+    return this.enemies
+      .filter((e) => e.befriended && e.alive)
+      .map((e) => ({ voiceId: e.voiceId, x: e.position.x, y: e.position.y, z: e.position.z }));
+  }
+
+  loadState(friends: FriendState[]): void {
+    for (const f of friends) {
+      const Ctor = BY_VOICE[f.voiceId];
+      if (!Ctor) continue;
+      const e = new Ctor();
+      e.init(new THREE.Vector3(f.x, f.y, f.z));
+      e.befriend();
+      this.scene.add(e.mesh);
+      this.enemies.push(e);
+      this.onSpawn?.(e);
+    }
   }
 
   reset(): void {

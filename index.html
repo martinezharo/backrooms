@@ -154,6 +154,7 @@
           <span class="badge">plays in your browser</span>
         </div>
         <p class="objective-pitch">find three fuses · power the door · fall back into the world</p>
+        <button id="btn-continue" class="menu-btn big hidden">CONTINUE</button>
         <button id="btn-start" class="menu-btn big">DESCEND — PLAY FREE</button>
         <p id="landing-records" class="warn hidden"></p>
         <p class="warn">
@@ -213,7 +214,9 @@
     <div id="pause-screen" class="overlay menu-screen hidden">
       <h1 class="game-title small">PAUSED</h1>
       <button id="btn-resume" class="menu-btn">RESUME</button>
-      <button id="btn-restart" class="menu-btn">RESTART</button>
+      <button id="btn-save-quit" class="menu-btn">SAVE &amp; QUIT</button>
+      <button id="btn-restart" class="menu-btn ghost">RESTART — DISCARD THIS RUN</button>
+      <p id="pause-saved" class="warn"></p>
     </div>
 
     <!-- Game over -->

@@ -5,8 +5,9 @@ import * as THREE from 'three';
 import { BOTTLE_CAPACITY, CHUNK } from '../core/constants';
 import { World } from '../world/World';
 import { ChunkData } from '../world/Chunk';
+import { PickupsState } from '../core/Save';
 import { buildItemMesh } from './ItemMeshes';
-import { ItemInstance, makeItem } from './Items';
+import { ItemInstance, makeItem, reviveItem, snapshotItem } from './Items';
 
 export interface Pickup {
   item: ItemInstance;
@@ -137,5 +138,35 @@ export class Pickups {
     this.pickups.length = 0;
     this.consumed.clear();
     this.droppedByChunk.clear();
+  }
+
+  saveState(): PickupsState {
+    const drops: PickupsState['drops'] = [];
+    // in the loaded ring the drops are live pickups; further out they are
+    // parked by chunk, waiting for that chunk to come back
+    for (const p of this.pickups) {
+      if (p.spawnId === null) drops.push({ item: snapshotItem(p.item), x: p.x, y: p.y, z: p.z });
+    }
+    for (const list of this.droppedByChunk.values()) {
+      for (const d of list) drops.push({ item: snapshotItem(d.item), x: d.x, y: d.y, z: d.z });
+    }
+    return { consumed: [...this.consumed], drops };
+  }
+
+  /**
+   * Must run before the first chunk is generated: taken spawns are skipped as
+   * chunks load, and parked drops are placed by the same hook.
+   */
+  loadState(s: PickupsState): void {
+    this.reset();
+    for (const id of s.consumed) this.consumed.add(id);
+    for (const d of s.drops) {
+      const item = reviveItem(d.item);
+      if (!item) continue;
+      const key = this.chunkKey(d.x, d.z);
+      const list = this.droppedByChunk.get(key) ?? [];
+      list.push({ item, x: d.x, y: d.y, z: d.z });
+      this.droppedByChunk.set(key, list);
+    }
   }
 }

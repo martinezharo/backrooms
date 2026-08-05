@@ -8,6 +8,7 @@ import {
   SWIM_SPEED, WALK_SPEED,
 } from '../core/constants';
 import { Input } from '../core/Input';
+import { PlayerState } from '../core/Save';
 import { AABB, World } from '../world/World';
 
 const MAX_STEP = 0.45;
@@ -69,6 +70,24 @@ export class Player {
     this.velocity.set(0, 0, 0);
     this.yaw = Math.random() * Math.PI * 2;
     this.pitch = 0;
+    this.height = PLAYER_HEIGHT;
+    this.crouching = false;
+    this.mantleTimer = 0;
+  }
+
+  saveState(): PlayerState {
+    return {
+      x: this.position.x, y: this.position.y, z: this.position.z,
+      yaw: this.yaw, pitch: this.pitch,
+    };
+  }
+
+  /** Come back standing and still: a checkpoint is never mid-fall. */
+  loadState(s: PlayerState): void {
+    this.position.set(s.x, s.y, s.z);
+    this.velocity.set(0, 0, 0);
+    this.yaw = s.yaw;
+    this.pitch = s.pitch;
     this.height = PLAYER_HEIGHT;
     this.crouching = false;
     this.mantleTimer = 0;

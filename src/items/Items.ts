@@ -100,3 +100,33 @@ export function makeItem(id: string, water = 0): ItemInstance {
   const def = ITEMS[id];
   return { def, durability: def.durability, ammo: 0, water };
 }
+
+/** The instance state worth writing to a save — the def is looked up again. */
+export interface ItemSnapshot {
+  id: string;
+  /** null = indestructible; JSON has no Infinity */
+  durability: number | null;
+  ammo: number;
+  water: number;
+}
+
+export function snapshotItem(item: ItemInstance): ItemSnapshot {
+  return {
+    id: item.def.id,
+    durability: isFinite(item.durability) ? item.durability : null,
+    ammo: item.ammo,
+    water: item.water,
+  };
+}
+
+/** Rebuild an item from a save. Ids this build no longer knows are dropped. */
+export function reviveItem(s: ItemSnapshot): ItemInstance | null {
+  const def = ITEMS[s.id];
+  if (!def) return null;
+  return {
+    def,
+    durability: s.durability === null ? def.durability : s.durability,
+    ammo: s.ammo ?? 0,
+    water: s.water ?? 0,
+  };
+}

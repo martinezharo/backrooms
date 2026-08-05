@@ -12,16 +12,21 @@ export class Menus {
   private escapeCause = document.getElementById('escape-cause')!;
   private escapeStats = document.getElementById('escape-stats')!;
   private escapeRecords = document.getElementById('escape-records')!;
+  private pauseSaved = document.getElementById('pause-saved')!;
   private landingRecords = document.getElementById('landing-records')!;
 
   onStart: (() => void) | null = null;
+  onContinue: (() => void) | null = null;
   onResume: (() => void) | null = null;
+  onSaveQuit: (() => void) | null = null;
   onRestart: (() => void) | null = null;
   onNewSeed: (() => void) | null = null;
 
   constructor() {
     document.getElementById('btn-start')!.addEventListener('click', () => this.onStart?.());
+    document.getElementById('btn-continue')!.addEventListener('click', () => this.onContinue?.());
     document.getElementById('btn-resume')!.addEventListener('click', () => this.onResume?.());
+    document.getElementById('btn-save-quit')!.addEventListener('click', () => this.onSaveQuit?.());
     document.getElementById('btn-restart')!.addEventListener('click', () => this.onRestart?.());
     document.getElementById('btn-respawn')!.addEventListener('click', () => this.onRestart?.());
     document.getElementById('btn-again')!.addEventListener('click', () => this.onNewSeed?.());
@@ -42,8 +47,12 @@ export class Menus {
     this.escape.classList.add('hidden');
   }
 
-  showPause(visible: boolean): void {
+  /** Pausing writes a checkpoint; say so, or say why it couldn't. */
+  showPause(visible: boolean, saved = true): void {
     this.pause.classList.toggle('hidden', !visible);
+    this.pauseSaved.textContent = saved
+      ? 'run saved — you can close the tab and come back'
+      : 'no storage in this browser — this run cannot be saved';
   }
 
   showGameOver(cause: string, survivedSeconds: number, fuses: number): void {

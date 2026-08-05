@@ -28,6 +28,7 @@ import { Menus } from '../ui/Menus';
 import { TouchControls } from '../ui/TouchControls';
 import { Input } from './Input';
 import { loadRecords, noteDepth, noteEscape, noteRunStarted } from './Records';
+import { clearSave, loadSave, SaveGame, writeSave } from './Save';
 import { getRenderQuality } from '../rendering/Quality';
 
 type GameState = 'menu' | 'playing' | 'paused' | 'dead' | 'escaping' | 'escaped';
@@ -39,6 +40,8 @@ const SPAWN_Z = 17;
 const TORCH_DRAIN = 100 / 300;
 /** servings in one almond water machine */
 const VENDING_SERVINGS = 3;
+/** seconds between autosaves — the checkpoint is never more than this stale */
+const AUTOSAVE_EVERY = 20;
 
 export class Game {
   private state: GameState = 'menu';
@@ -81,9 +84,13 @@ export class Game {
   private portals: PortalManager;
   private escape = new Escape();
   private escapeFuses = 0;
+  private portalOpened = false;
   private torchCharge = 100;
   private vendingLeft = new Map<string, number>();
   private receiverOnExit = false;
+  private saveTimer = AUTOSAVE_EVERY;
+  /** set on the way out: the loop stops asking for frames */
+  private stopped = false;
   private pingTimer = 0;
   private depthTimer = 0;
   private readonly viewDirection = new THREE.Vector3();
@@ -135,27 +142,37 @@ export class Game {
       this.player.camera.updateProjectionMatrix();
     });
 
+    // closing the tab is the most common way to stop playing; don't let it
+    // cost the twenty seconds since the last autosave
+    window.addEventListener('pagehide', () => {
+      if (this.state === 'playing' || this.state === 'paused') this.saveRun();
+    });
+
     this.menus.showRecords(loadRecords());
     this.menus.showStart();
     requestAnimationFrame(() => this.loop());
   }
 
   /** Called by the small landing-page bootstrap after the game chunk loads. */
-  public async start(): Promise<void> {
-    await this.startGame();
+  public async start(resume = false): Promise<void> {
+    await this.startGame(resume ? loadSave() : null);
   }
 
   // ------------------------------------------------------------ wiring
 
   private wireEvents(): void {
     this.menus.onStart = () => this.startGame();
+    this.menus.onContinue = () => this.startGame(loadSave());
     this.menus.onResume = () => this.resume();
+    this.menus.onSaveQuit = () => this.saveAndQuit();
     this.menus.onRestart = () => {
+      clearSave();
       const url = new URL(location.href);
       url.searchParams.set('seed', String(this.seed));
       location.href = url.toString();
     };
     this.menus.onNewSeed = () => {
+      clearSave();
       const url = new URL(location.href);
       url.searchParams.set('seed', String((Math.random() * 0xffffffff) >>> 0));
       location.href = url.toString();
@@ -173,6 +190,8 @@ export class Game {
     };
     this.stats.onDeath = (cause) => {
       this.state = 'dead';
+      clearSave(); // a checkpoint is for putting the game down, not for dying twice
+
       this.expectUnlock = true;
       this.input.exitPointerLock();
       this.touch.setActive(false);
@@ -234,32 +253,67 @@ export class Game {
 
   // ------------------------------------------------------- state changes
 
-  private async startGame(): Promise<void> {
+  private async startGame(save: SaveGame | null = null): Promise<void> {
     this.menus.hideAll();
     await this.audio.resume();
     this.music.start();
 
+    // a save describes one maze; a different seed is a different maze
+    const resumed = save && save.seed === this.seed ? save : null;
+
+    // Everything the chunk loader consults has to be back in place before the
+    // first chunk exists: taken spawns, items left on the floor, the door.
+    this.pickups.reset();
+    this.spawner.reset();
+    if (resumed) {
+      this.pickups.loadState(resumed.pickups);
+      if (resumed.portalOpen) this.portals.setOpen();
+    }
+
     // Build the whole visible radius up front. Streaming it in afterwards only
     // moves the cost into the first seconds of play, where it shows up as
     // stutter and geometry popping in inside the view distance.
-    this.world.preload(SPAWN_X, SPAWN_Z);
-    this.player.reset(SPAWN_X, SPAWN_Z);
-    this.stats.reset();
-    this.survivalTime = 0;
-    this.torchCharge = 100;
+    const x = resumed ? resumed.player.x : SPAWN_X;
+    const z = resumed ? resumed.player.z : SPAWN_Z;
+    this.world.preload(x, z);
 
-    // You wake up already kitted: torch in hand (off — F is yours to press)
-    // and the receiver in the bag. Neither is worth a scavenger hunt, so
-    // neither spawns in the world.
-    this.inventory.clear();
-    this.inventory.add(makeItem('flashlight'));
-    this.inventory.add(makeItem('detector'));
-    this.lighting.setFlashlight(false);
+    if (resumed) {
+      this.player.loadState(resumed.player);
+      this.stats.loadState(resumed.stats);
+      this.inventory.loadState(resumed.inventory);
+      this.spawner.loadState(resumed.friends);
+      this.time = resumed.time;
+      this.survivalTime = resumed.survivalTime;
+      this.torchCharge = resumed.torchCharge;
+      this.lighting.setFlashlight(resumed.torchOn && resumed.torchCharge > 1);
+      this.receiverOnExit = resumed.receiverOnExit;
+      this.vendingLeft = new Map(resumed.vending);
+      this.escapeFuses = resumed.escapeFuses;
+      this.portalOpened = resumed.portalOpen;
+      this.flashMessage('YOU WERE HERE BEFORE');
+    } else {
+      this.player.reset(SPAWN_X, SPAWN_Z);
+      this.stats.reset();
+      this.survivalTime = 0;
+      this.torchCharge = 100;
+
+      // You wake up already kitted: torch in hand (off — F is yours to press)
+      // and the receiver in the bag. Neither is worth a scavenger hunt, so
+      // neither spawns in the world.
+      this.inventory.clear();
+      this.inventory.add(makeItem('flashlight'));
+      this.inventory.add(makeItem('detector'));
+      this.lighting.setFlashlight(false);
+
+      this.vendingLeft.clear();
+      this.receiverOnExit = false;
+      this.escapeFuses = 0;
+      this.portalOpened = false;
+      clearSave(); // a fresh descent buries whatever run was waiting
+      noteRunStarted();
+    }
     this.combat.reset();
-
-    this.vendingLeft.clear();
-    this.receiverOnExit = false;
-    noteRunStarted();
+    this.saveTimer = AUTOSAVE_EVERY;
 
     this.hud.show(true);
     this.state = 'playing';
@@ -270,12 +324,56 @@ export class Game {
     void this.input.requestPointerLock();
   }
 
+  /**
+   * The checkpoint. Nothing about the maze goes in — it regenerates from the
+   * seed — only what the level can't work out again on its own.
+   */
+  private saveRun(): boolean {
+    return writeSave({
+      seed: this.seed,
+      time: this.time,
+      survivalTime: this.survivalTime,
+      player: this.player.saveState(),
+      stats: this.stats.saveState(),
+      inventory: this.inventory.saveState(),
+      pickups: this.pickups.saveState(),
+      friends: this.spawner.saveState(),
+      torchCharge: this.torchCharge,
+      torchOn: this.lighting.flashlightOn,
+      receiverOnExit: this.receiverOnExit,
+      vending: [...this.vendingLeft],
+      portalOpen: this.portalOpened,
+      escapeFuses: this.escapeFuses,
+    });
+  }
+
   private pauseGame(): void {
     if (this.state !== 'playing') return;
+    const saved = this.saveRun();
     this.state = 'paused';
+    // Esc usually drops the lock itself, but not every route into the pause
+    // menu does — and a locked pointer can't click a button.
+    this.expectUnlock = true;
+    this.input.exitPointerLock();
     this.touch.setActive(false);
-    this.menus.showPause(true);
+    this.menus.showPause(true, saved);
     void this.audio.suspend();
+  }
+
+  /**
+   * Back to the landing page, where the run is waiting under CONTINUE. The
+   * renderer and the world go down first: navigating away from a live WebGL
+   * context leaves the browser holding it while the new page builds another.
+   */
+  private saveAndQuit(): void {
+    this.saveRun();
+    this.stopped = true;
+    this.input.exitPointerLock();
+    this.touch.setActive(false);
+    void this.audio.suspend();
+    this.world.dispose();
+    this.renderer.dispose();
+    location.reload();
   }
 
   private async resume(): Promise<void> {
@@ -295,6 +393,7 @@ export class Game {
   // -------------------------------------------------------------- loop
 
   private loop(): void {
+    if (this.stopped) return;
     requestAnimationFrame(() => this.loop());
     const now = performance.now();
     // simulation dt is clamped so a stall can't teleport anything; the FPS
@@ -578,6 +677,12 @@ export class Game {
       noteDepth(Math.hypot(p.position.x - SPAWN_X, p.position.z - SPAWN_Z));
     }
 
+    this.saveTimer -= dt;
+    if (this.saveTimer <= 0) {
+      this.saveTimer = AUTOSAVE_EVERY;
+      this.saveRun();
+    }
+
     // ---- HUD ----
     this.hud.setBars(this.stats.health, this.stats.thirst);
     this.hud.setTorch(this.inventory.has('flashlight') ? this.torchCharge : null);
@@ -702,6 +807,7 @@ export class Game {
       if (placed.item.def.id === 'fuse') this.inventory.remove(placed.item);
     }
     this.escapeFuses = fuses;
+    this.portalOpened = true;
     portal.open();
     this.audio.playSfx('fuseIn', 0.8);
     this.audio.playSfx('portalOpen', 0.75, 0.02);
@@ -715,6 +821,8 @@ export class Game {
   /** Step through: the maze stops rendering and the fall takes over. */
   private beginEscape(): void {
     this.state = 'escaping';
+    clearSave(); // the run is over the moment you step through
+
     this.expectUnlock = true;
     this.input.exitPointerLock();
     this.touch.setActive(false);

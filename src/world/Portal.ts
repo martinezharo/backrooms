@@ -156,6 +156,8 @@ export class PortalManager {
   portal: Portal | null = null;
   private scene: THREE.Scene;
   private seed: number;
+  /** restored from a save: the fuses went in before you quit */
+  private alreadyOpen = false;
 
   constructor(scene: THREE.Scene, world: World, seed: number) {
     this.scene = scene;
@@ -167,6 +169,13 @@ export class PortalManager {
   private chunkLoaded(c: ChunkData): void {
     if (!c.portal || this.portal) return;
     this.portal = new Portal(this.scene, c.portal, this.seed);
+    if (this.alreadyOpen) this.portal.open();
+  }
+
+  /** The door stays fed across a save, whether or not its chunk is loaded. */
+  setOpen(): void {
+    this.alreadyOpen = true;
+    this.portal?.open();
   }
 
   update(time: number, dt: number): void {

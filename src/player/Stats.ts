@@ -4,6 +4,7 @@ import {
   DEHYDRATION_BASE, HEALTH_REGEN, POOL_DRINK_RATE, TAP_DRINK_RATE,
   THIRST_DRAIN, THIRST_DRAIN_RUN_MULT,
 } from '../core/constants';
+import { StatsState } from '../core/Save';
 
 export type DeathCause = 'dehydration' | string; // string = killed by <enemy name>
 
@@ -21,6 +22,17 @@ export class Stats {
     this.thirst = 100;
     this.alive = true;
     this.dehydrationTime = 0;
+  }
+
+  saveState(): StatsState {
+    return { health: this.health, thirst: this.thirst, dehydration: this.dehydrationTime };
+  }
+
+  loadState(s: StatsState): void {
+    this.health = s.health;
+    this.thirst = s.thirst;
+    this.dehydrationTime = s.dehydration;
+    this.alive = this.health > 0;
   }
 
   update(dt: number, running: boolean, drinkingTap: boolean, submerged: boolean): void {
