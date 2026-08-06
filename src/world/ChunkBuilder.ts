@@ -296,7 +296,7 @@ export function buildChunk(c: ChunkData): THREE.Group {
       const k = idx(i, j);
       if (c.solid[k]) continue;
       pushFloorCell(floorBatches, bm.floor, i, j, wx0, wz0, c.floor[k], true);
-      pushFloorCell(floorBatches, bm.ceil, i, j, wx0, wz0, c.ceil, false);
+      pushFloorCell(floorBatches, bm.ceil, i, j, wx0, wz0, c.ceil - c.ceilDrop[k], false);
     }
   }
 
@@ -321,6 +321,35 @@ export function buildChunk(c: ChunkData): THREE.Group {
         if (dir === 1) pushBox(buckets, sideKey, 0.06, h, CELL, wx0 + (i + 1) * CELL - 0.03, cy, wz0 + (j + 0.5) * CELL, 0, CELL);
         if (dir === 2) pushBox(buckets, sideKey, CELL, h, 0.06, wx0 + (i + 0.5) * CELL, cy, wz0 + j * CELL + 0.03, 0, CELL);
         if (dir === 3) pushBox(buckets, sideKey, CELL, h, 0.06, wx0 + (i + 0.5) * CELL, cy, wz0 + (j + 1) * CELL - 0.03, 0, CELL);
+      }
+    }
+  }
+
+  // ---- soffits (the same step, upside down, where a ceiling drops) ----
+  // Without these, a bay whose ceiling hangs lower than its neighbour's opens a
+  // slot straight into the void above the slab.
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      const k = idx(i, j);
+      if (c.solid[k]) continue;
+      const drop = c.ceilDrop[k];
+      if (drop <= 0.01) continue;
+      const y = c.ceil - drop;
+      const sides: [number, number, number][] = [
+        [i - 1, j, 0], [i + 1, j, 1], [i, j - 1, 2], [i, j + 1, 3],
+      ];
+      for (const [ni, nj, dir] of sides) {
+        if (ni < 0 || ni >= N || nj < 0 || nj >= N) continue;
+        const nk = idx(ni, nj);
+        if (c.solid[nk]) continue; // a solid cell is a full column already
+        const nd = c.ceilDrop[nk];
+        if (nd >= drop - 0.01) continue;
+        const h = drop - nd;
+        const cy = y + h / 2;
+        if (dir === 0) pushBox(buckets, bm.wall, 0.06, h, CELL, wx0 + i * CELL + 0.03, cy, wz0 + (j + 0.5) * CELL, 0, CELL);
+        if (dir === 1) pushBox(buckets, bm.wall, 0.06, h, CELL, wx0 + (i + 1) * CELL - 0.03, cy, wz0 + (j + 0.5) * CELL, 0, CELL);
+        if (dir === 2) pushBox(buckets, bm.wall, CELL, h, 0.06, wx0 + (i + 0.5) * CELL, cy, wz0 + j * CELL + 0.03, 0, CELL);
+        if (dir === 3) pushBox(buckets, bm.wall, CELL, h, 0.06, wx0 + (i + 0.5) * CELL, cy, wz0 + (j + 1) * CELL - 0.03, 0, CELL);
       }
     }
   }

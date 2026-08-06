@@ -173,7 +173,7 @@ export class World {
 
   ceilAt(gi: number, gj: number): number {
     const r = this.cell(gi, gj);
-    return r ? r.c.ceil : Infinity;
+    return r ? r.c.ceil - r.c.ceilDrop[r.j * N + r.i] : Infinity;
   }
 
   /** Water surface height in this cell, or null. */

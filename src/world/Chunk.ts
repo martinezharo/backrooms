@@ -90,6 +90,7 @@ export interface ChunkData {
   wallsH: Uint8Array;
   solid: Uint8Array;       // solid cells — unwalkable; SOLID_PROP = don't draw
   floor: Float32Array;     // per-cell floor height
+  ceilDrop: Float32Array;  // per-cell soffit: how far the ceiling hangs below c.ceil
   water: Uint8Array;       // per-cell water flag
   lights: LightFixture[];
   taps: TapSpot[];
@@ -332,6 +333,13 @@ const CAR_PAINT = [
 
 // -------------------------------------------------------------- site tools
 
+/**
+ * How much the service ramp falls per 2 m bay. Shallow enough to walk without
+ * the step-up rule fighting you, steep enough that a dozen bays put the bottom
+ * of it properly under the floor you are standing on.
+ */
+const RAMP_FALL = 0.28;
+
 /** Flat, dry, wall-free floor around a site so it always reads as a clearing. */
 function carveApron(c: ChunkData, si: number, sj: number, r: number, floorY = 0): void {
   for (let dj = -r; dj <= r; dj++) {
@@ -373,6 +381,7 @@ export function generateChunk(seed: number, depth: number, cx: number, cz: numbe
     wallsH: new Uint8Array((N + 1) * N),
     solid: new Uint8Array(N * N),
     floor: new Float32Array(N * N),
+    ceilDrop: new Float32Array(N * N),
     water: new Uint8Array(N * N),
     lights: [],
     taps: [],
@@ -516,7 +525,9 @@ export function generateChunk(seed: number, depth: number, cx: number, cz: numbe
   let siteCell: { i: number; j: number } | null = null;
   if (isDescentChunk(seed, depth, cx, cz) && depth < LAST_DEPTH) {
     const si = randInt(rng, 6, 10);
-    const sj = randInt(rng, 6, 10);
+    // The car park's service ramp runs most of a chunk before it bottoms out,
+    // so its shutter has to stand well into the +z half to leave room behind it.
+    const sj = biome === BiomeId.Level1 ? randInt(rng, 11, 14) : randInt(rng, 6, 10);
     siteCell = { i: si, j: sj };
     buildDescentSite(c, si, sj, cellCenter);
   }
@@ -588,6 +599,17 @@ export function generateChunk(seed: number, depth: number, cx: number, cz: numbe
     for (let k = 0; k < N * N; k++) {
       if (c.solid[k] === SOLID_PROP && !parked[k]) c.solid[k] = 0;
     }
+  }
+  // Bay markings are painted flat on the slab at y=0. Where the ramp has taken
+  // the floor out from under one, the paint would hang in the air over the
+  // trench, so the bay goes with the floor it was painted on.
+  if (c.bays.length) {
+    c.bays = c.bays.filter((b) => {
+      const i = Math.floor((b.x - wx0) / CELL);
+      const j = Math.round((b.z - wz0) / CELL) - 1;
+      if (i < 0 || i >= N || j < 0 || j + 1 >= N) return true;
+      return c.floor[idx(i, j)] > -0.01 && c.floor[idx(i, j + 1)] > -0.01;
+    });
   }
 
   fixConnectivity(c, seeds);
@@ -956,31 +978,55 @@ function buildDescentSite(
       break;
     }
     case BiomeId.Level1: {
-      // the service ramp: a shutter in a wall, and a floor that keeps going
+      // The service ramp: a shutter in a wall, and behind it a road that keeps
+      // going. The length is the whole point — a four-step stub ending in a
+      // wall reads as a cupboard, so the ramp runs to the far side of the
+      // chunk and takes its ceiling down with it. Through the mouth you see
+      // the lights march away and sink, and there is no question where it goes.
       carveApron(c, si, sj, 3);
       standingWall(c, 1, sj, si - 3, si + 3);
       for (let d = 0; d < 2; d++) c.wallsH[sj * N + si - 1 + d] = 0; // the mouth
-      // Steps down behind it, walled on three sides. The far end has to be
-      // sealed: a 1.6 m pit you can walk into from the level side is a hole a
+      // Two lanes wide, walled down both sides, and sealed at the bottom: a
+      // three-metre trench you could walk into from the level side is a hole a
       // player cannot climb back out of, and the shutter would be guarding
-      // nothing.
-      for (let s = 1; s <= 4; s++) {
+      // nothing. One cell of margin at the chunk border keeps the seal and its
+      // soffit inside this chunk, where they have geometry to close them off.
+      const bays = Math.max(4, sj - 1);
+      for (let s = 1; s <= bays; s++) {
         const j = sj - s;
-        if (j < 0) break;
+        if (j < 1) break;
         for (let d = -1; d <= 0; d++) {
           const k = idx(si + d, j);
           c.solid[k] = 0;
-          c.floor[k] = -0.4 * s;
-          c.wallsH[j * N + si + d] = s === 4 ? 1 : 0;
+          c.floor[k] = -RAMP_FALL * s;
+          // the soffit trails the road by one bay, so headroom never changes
+          c.ceilDrop[k] = RAMP_FALL * (s - 1);
+          c.water[k] = 0;
+          c.wallsH[j * N + si + d] = s === bays ? 1 : 0;
         }
         c.wallsV[(si - 1) * N + j] = 1;
         c.wallsV[(si + 1) * N + j] = 1;
+        // A strip every third bay. They get worse the further down they are,
+        // which is what makes the bottom read as distance rather than as a wall.
+        if (s % 3 === 1) {
+          c.lights.push({
+            x: wx0 + (si - 0.5) * CELL,
+            y: c.ceil - RAMP_FALL * (s - 1) - 0.1,
+            z: wz0 + (j + 0.5) * CELL,
+            broken: s > bays - 3,
+            flicker: s > 4,
+            phase: s * 1.7,
+            speed: 6 + s,
+            strip: true,
+          });
+        }
       }
       c.descent = {
         kind: 'shutter',
         x: wx0 + (si - 0.5) * CELL, y: 0, z: wz0 + sj * CELL,
         angle: 0,
-        tx: wx0 + (si - 0.5) * CELL, ty: -1.6, tz: wz0 + (sj - 3.5) * CELL,
+        // unchanged: the floor still takes you the same few metres in
+        tx: wx0 + (si - 0.5) * CELL, ty: -RAMP_FALL * 4, tz: wz0 + (sj - 3.5) * CELL,
       };
       break;
     }
