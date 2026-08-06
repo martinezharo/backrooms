@@ -1,9 +1,11 @@
-// Where the run's objective lives: three fuses scattered far apart and the
-// exit portal, all derived from the seed alone so every chunk can decide on
+// Where the last floor's objective lives: three fuses scattered far apart and
+// the exit portal, all derived from the seed alone so every chunk can decide on
 // its own whether it holds something, without any global state.
+//
+// Only Level ! ever asks. Every floor above it has its own way down, and none
+// of them is a fuse hunt.
 
 import { hash3, mulberry32 } from '../core/rng';
-import { BiomeId, biomeForChunk } from './Biomes';
 
 export interface FuseSite { cx: number; cz: number; index: number; }
 export interface ExitSite { cx: number; cz: number; onWall: boolean; }
@@ -24,10 +26,8 @@ const cache = new Map<number, ObjectiveLayout>();
  * Spirals outward deterministically so the answer never depends on load order.
  */
 function pickChunk(
-  seed: number,
   angle: number,
   dist: number,
-  ok: (b: BiomeId) => boolean,
   taken: Set<string>,
 ): { cx: number; cz: number } {
   const ix = Math.round(Math.cos(angle) * dist);
@@ -40,7 +40,6 @@ function pickChunk(
         const cz = iz + dz;
         if (cx === 0 && cz === 0) continue;      // never on the spawn chunk
         if (taken.has(`${cx},${cz}`)) continue;
-        if (!ok(biomeForChunk(seed, cx, cz))) continue;
         taken.add(`${cx},${cz}`);
         return { cx, cz };
       }
@@ -59,13 +58,11 @@ export function objectiveLayout(seed: number): ObjectiveLayout {
   const taken = new Set<string>();
 
   // The three fuses sit roughly 120° apart so you always cross new ground.
-  // Level 7 is excluded: a fuse under two metres of black water is not a
-  // challenge, it's a coin toss.
   const fuses: FuseSite[] = [];
   for (let i = 0; i < FUSE_COUNT; i++) {
     const angle = base + (i * 2 * Math.PI) / FUSE_COUNT + (rng() - 0.5) * 0.6;
     const dist = FUSE_MIN + rng() * (FUSE_MAX - FUSE_MIN);
-    const c = pickChunk(seed, angle, dist, (b) => b !== BiomeId.Level7, taken);
+    const c = pickChunk(angle, dist, taken);
     fuses.push({ ...c, index: i });
   }
 
@@ -73,7 +70,7 @@ export function objectiveLayout(seed: number): ObjectiveLayout {
   // last stretch is a run back through ground you already know.
   const exitAngle = base + Math.PI / FUSE_COUNT + (rng() - 0.5) * 0.4;
   const exitDist = EXIT_MIN + rng() * (EXIT_MAX - EXIT_MIN);
-  const e = pickChunk(seed, exitAngle, exitDist, (b) => b !== BiomeId.Level7, taken);
+  const e = pickChunk(exitAngle, exitDist, taken);
   const onWall = mulberry32(hash3(seed, e.cx, e.cz, 0x9d1c5f))() < 0.5;
 
   const layout: ObjectiveLayout = { fuses, exit: { ...e, onWall } };

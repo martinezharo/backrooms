@@ -103,7 +103,8 @@ export class Player {
    * all share one neutral step rather than each getting a character of its own.
    */
   private surfaceAt(world: World): 'carpet' | 'hard' {
-    return world.biomeAt(this.position.x, this.position.z).ambienceId === 'hum' ? 'carpet' : 'hard';
+    const a = world.biomeAt(this.position.x, this.position.z).ambienceId;
+    return a === 'hum' || a === 'wrong' ? 'carpet' : 'hard';
   }
 
   update(dt: number, input: Input, world: World, sensitivity = 0.0023): void {

@@ -1,5 +1,7 @@
+import { DEV_HACKS } from './core/dev';
 import { formatTime } from './core/Records';
 import { loadSave } from './core/Save';
+import { BIOMES, DEPTHS } from './world/Biomes';
 
 // An unfinished run remembers its own maze, so it also decides the seed —
 // unless the URL asks for a specific one, which always wins.
@@ -25,9 +27,10 @@ let game: Game | null = null;
 let loading = false;
 
 if (canContinue) {
-  const fuses = save!.inventory.items.filter((i) => i.item.id === 'fuse').length;
-  continueButton.textContent = `CONTINUE — ${formatTime(save!.survivalTime)} IN`
-    + (fuses > 0 ? ` · ${fuses}/3 FUSES` : '');
+  // The floor you're standing on says more about a run than the clock does.
+  const depth = Math.max(0, Math.min(DEPTHS.length - 1, save!.depth ?? 0));
+  continueButton.textContent =
+    `CONTINUE — ${BIOMES[DEPTHS[depth]].name} · ${formatTime(save!.survivalTime)} IN`;
   continueButton.classList.remove('hidden');
   startButton.textContent = 'START OVER';
 }
@@ -52,8 +55,8 @@ async function bootGame(resume: boolean): Promise<void> {
     const { Game: GameClass } = await import('./core/Game');
     game = new GameClass(seed);
 
-    // debug/testing hook (used by the headless smoke tests)
-    (window as unknown as { __game: Game }).__game = game;
+    // debug/testing hook (used by the headless smoke tests) — dev builds only
+    if (DEV_HACKS) (window as unknown as { __game: Game }).__game = game;
     await game.start(resume);
   } catch (error) {
     console.error('Could not start the game', error);

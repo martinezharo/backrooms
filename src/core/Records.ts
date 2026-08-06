@@ -10,11 +10,15 @@ export interface Records {
   bestSeconds: number | null;
   /** most fuses carried out in one run */
   bestFuses: number;
-  /** furthest from spawn, metres */
+  /** furthest from spawn on any one floor, metres */
   deepest: number;
+  /** lowest floor ever reached, as an index into DEPTHS */
+  deepestLevel: number;
 }
 
-const EMPTY: Records = { runs: 0, escapes: 0, bestSeconds: null, bestFuses: 0, deepest: 0 };
+const EMPTY: Records = {
+  runs: 0, escapes: 0, bestSeconds: null, bestFuses: 0, deepest: 0, deepestLevel: 0,
+};
 
 let memory: Records | null = null;
 
@@ -46,6 +50,12 @@ export function noteRunStarted(): void {
 export function noteDepth(metres: number): void {
   const r = loadRecords();
   if (metres > r.deepest + 1) save({ ...r, deepest: Math.round(metres) });
+}
+
+/** The floor itself is the record now: getting to Level ! at all is the run. */
+export function noteLevel(depth: number): void {
+  const r = loadRecords();
+  if (depth > r.deepestLevel) save({ ...r, deepestLevel: depth });
 }
 
 export function noteEscape(fuses: number, seconds: number): Records {

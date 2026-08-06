@@ -31,7 +31,7 @@ import waterImpact1 from './clips/steps/water_impact_1.mp3?url';
 import waterImpact2 from './clips/steps/water_impact_2.mp3?url';
 import waterImpact3 from './clips/steps/water_impact_3.mp3?url';
 
-type AmbienceId = 'hum' | 'tunnel' | 'pool' | 'deep';
+type AmbienceId = 'hum' | 'garage' | 'tunnel' | 'pool' | 'deep' | 'wrong';
 /**
  * Only two dry surfaces, deliberately. The tunnels and the poolrooms tried a
  * stone recording for a while and it read as gravel underfoot — an outdoor
@@ -155,6 +155,7 @@ export class AudioEngine {
   private hauntWet: GainNode;
   private muffled = false;
   private dripTimer = 0;
+  private stage: THREE.Object3D | null = null;
   private hauntTimer = 25 + Math.random() * 35;
   private dread = 0;
   private sprayNode: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
@@ -454,6 +455,102 @@ export class AudioEngine {
         d[i] *= k;
         d[n - 1 - i] *= k;
       }
+    }));
+
+    // ---- the way down (one per floor, and each floor sounds like itself) ----
+    B.set('carAlarm', makeBuffer(ctx, 2.6, (d, sr) => {
+      // the two-tone yelp, repeated, the way every car in the world does it
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const step = Math.floor(t * 7) % 2;
+        const f = step ? 1180 : 880;
+        const gate = ((t * 7) % 1) < 0.72 ? 1 : 0;
+        const fade = 1 - Math.pow(t / 2.6, 3);
+        d[i] = (Math.sign(Math.sin(2 * Math.PI * f * t)) * 0.16
+          + Math.sin(2 * Math.PI * f * 2 * t) * 0.05) * gate * fade;
+      }
+      lowpass(d, 0.6);
+    }));
+    B.set('shutter', makeBuffer(ctx, 3.2, (d, sr) => {
+      // a rolling door: a motor, and every slat hitting the next one
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const motor = Math.sin(2 * Math.PI * 74 * t) * 0.18
+          + Math.sin(2 * Math.PI * 149 * t) * 0.07;
+        const rattle = ((t * 26) % 1) < 0.08 ? (Math.random() - 0.5) * 0.7 : 0;
+        const env = Math.min(1, t * 4) * (1 - Math.pow(Math.max(0, t - 2.4) / 0.8, 2));
+        d[i] = (motor + rattle) * Math.max(0, env);
+      }
+      lowpass(d, 0.45);
+    }));
+    B.set('valve', makeBuffer(ctx, 1.4, (d, sr) => {
+      // metal that has not moved in years, deciding to
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const squeal = Math.sin(2 * Math.PI * (420 + Math.sin(t * 19) * 90) * t) * 0.13;
+        const grind = (Math.random() - 0.5) * 0.28;
+        d[i] = (squeal + grind) * Math.min(1, t * 6) * (1 - t / 1.4);
+      }
+      lowpass(d, 0.3);
+    }));
+    B.set('flood', makeBuffer(ctx, 4, (d, sr) => {
+      // a column of water arriving from somewhere above you
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        d[i] = (Math.random() * 2 - 1) * Math.min(1, t * 1.5) * 0.7;
+      }
+      lowpass(d, 0.22);
+    }));
+    B.set('clunk', makeBuffer(ctx, 0.9, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const body = Math.sin(2 * Math.PI * 96 * t) * envExp(i, sr, 9) * 0.7;
+        const hit = (Math.random() - 0.5) * envExp(i, sr, 55) * 0.8;
+        d[i] = body + hit;
+      }
+      lowpass(d, 0.32);
+    }));
+    B.set('beep', makeBuffer(ctx, 0.11, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        d[i] = Math.sign(Math.sin(2 * Math.PI * 1420 * t)) * envExp(i, sr, 26) * 0.14;
+      }
+    }));
+    B.set('deny', makeBuffer(ctx, 0.6, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const gate = ((t * 6) % 1) < 0.6 ? 1 : 0;
+        d[i] = Math.sign(Math.sin(2 * Math.PI * 190 * t)) * gate * 0.16 * (1 - t / 0.6);
+      }
+      lowpass(d, 0.5);
+    }));
+    B.set('crumble', makeBuffer(ctx, 1.6, (d, sr) => {
+      // plaster and paper letting go of a wall that was never load-bearing
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const tear = (Math.random() - 0.5) * Math.pow(1 - t / 1.6, 1.5);
+        const thud = Math.sin(2 * Math.PI * 58 * t) * envExp(i, sr, 5) * 0.5;
+        d[i] = tear * 0.55 + thud;
+      }
+      lowpass(d, 0.35);
+    }));
+    B.set('gasp', makeBuffer(ctx, 1.1, (d, sr) => {
+      // the breath you take when your head clears the surface
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const inhale = Math.pow(Math.min(1, t / 0.32), 2) * Math.pow(Math.max(0, 1 - (t - 0.32) / 0.7), 1.6);
+        d[i] = (Math.random() * 2 - 1) * inhale * 0.4;
+      }
+      lowpass(d, 0.4);
+    }));
+    B.set('heartbeat', makeBuffer(ctx, 1.1, (d, sr) => {
+      // what you hear instead of the room, once the oxygen bar goes red
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const beat = (u: number) => Math.exp(-Math.pow((t - u) * 14, 2));
+        d[i] = Math.sin(2 * Math.PI * 46 * t) * (beat(0.1) + beat(0.34) * 0.7) * 0.75;
+      }
+      lowpass(d, 0.18);
     }));
 
     // ---- enemy cues (one-shots, played at AI moments) ----
@@ -762,6 +859,26 @@ export class AudioEngine {
     audio.play();
   }
 
+  /**
+   * Same, at a fixed point in the world rather than on a moving thing. Used by
+   * anything the level owns: an alarm going off two aisles over, a shutter you
+   * hear open from wherever you happened to be standing.
+   */
+  playSfxAt(name: string, position: THREE.Vector3, volume = 1, refDist = 8): void {
+    if (!this.stage) { this.playSfx(name, volume * 0.5); return; }
+    const holder = new THREE.Object3D();
+    holder.position.copy(position);
+    this.stage.add(holder);
+    this.playCueAt(name, holder, volume, refDist);
+    // playCueAt detaches the audio when it ends; the holder goes with it
+    holder.addEventListener('childremoved', () => holder.removeFromParent());
+  }
+
+  /** Where world-positioned one-shots get parked while they play. */
+  attachStage(stage: THREE.Object3D): void {
+    this.stage = stage;
+  }
+
   // -------------------------------------------------------- hauntings
 
   /**
@@ -932,6 +1049,59 @@ export class AudioEngine {
         n.connect(nf); nf.connect(ng); ng.connect(out);
         break;
       }
+      case 'garage': {
+        // extractor fans somewhere you can't see, running on a slab that
+        // carries every one of them to you at once
+        const n = noiseSrc();
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass'; lp.frequency.value = 240;
+        const ng = ctx.createGain(); ng.gain.value = 0.13;
+        n.connect(lp); lp.connect(ng); ng.connect(out);
+        for (const [f, v] of [[57, 0.055], [58.6, 0.04], [114, 0.02]] as const) {
+          const o = ctx.createOscillator();
+          o.type = 'sine';
+          o.frequency.value = f;
+          const g = ctx.createGain(); g.gain.value = v;
+          o.connect(g); g.connect(out);
+          o.start();
+        }
+        // and, very faintly, the strip lights
+        const o = ctx.createOscillator();
+        o.type = 'sawtooth'; o.frequency.value = 120;
+        const olp = ctx.createBiquadFilter();
+        olp.type = 'lowpass'; olp.frequency.value = 700;
+        const og = ctx.createGain(); og.gain.value = 0.016;
+        o.connect(olp); olp.connect(og); og.connect(out);
+        o.start();
+        break;
+      }
+      case 'wrong': {
+        // the lobby's hum, a quarter-tone out and beating against itself
+        for (const [f, v] of [[120, 0.045], [118.3, 0.04], [239, 0.016], [61, 0.05]] as const) {
+          const o = ctx.createOscillator();
+          o.type = 'sawtooth';
+          o.frequency.value = f;
+          const lp = ctx.createBiquadFilter();
+          lp.type = 'lowpass';
+          lp.frequency.value = 620;
+          const g = ctx.createGain();
+          g.gain.value = v;
+          o.connect(lp); lp.connect(g); g.connect(out);
+          o.start();
+        }
+        const n = noiseSrc();
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass'; bp.frequency.value = 1400; bp.Q.value = 0.8;
+        const ng = ctx.createGain(); ng.gain.value = 0.02;
+        // it breathes, which fluorescent light does not
+        const lfo = ctx.createOscillator();
+        lfo.frequency.value = 0.11;
+        const lfoG = ctx.createGain(); lfoG.gain.value = 0.016;
+        lfo.connect(lfoG); lfoG.connect(ng.gain);
+        lfo.start();
+        n.connect(bp); bp.connect(ng); ng.connect(out);
+        break;
+      }
       case 'tunnel': {
         const n = noiseSrc();
         const lp = ctx.createBiquadFilter();
@@ -993,7 +1163,7 @@ export class AudioEngine {
   /** occasional drips for tunnel/pool ambiences */
   update(dt: number): void {
     const a = this.currentAmbience;
-    if (a === 'tunnel' || a === 'pool' || a === 'deep') {
+    if (a === 'tunnel' || a === 'pool' || a === 'deep' || a === 'garage' || a === 'wrong') {
       this.dripTimer -= dt;
       if (this.dripTimer <= 0) {
         this.dripTimer = 1.5 + Math.random() * 6;

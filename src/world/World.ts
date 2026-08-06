@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { CELL, CELLS, CHUNK, LOAD_RADIUS, UNLOAD_RADIUS } from '../core/constants';
-import { BiomeDef, BiomeId, BIOMES, biomeForChunk } from './Biomes';
+import { BiomeDef, BiomeId, defForDepth } from './Biomes';
 import { ChunkData, generateChunk, LightFixture } from './Chunk';
 import { buildChunk, disposeChunk } from './ChunkBuilder';
 
@@ -20,15 +20,50 @@ export function flickerOn(light: LightFixture, time: number): boolean {
 
 export class World {
   readonly seed: number;
+  /** which floor of the building is currently built */
+  depth = 0;
+  /**
+   * Metres the level's water has risen above where it was poured. Only Level 37
+   * ever moves it, and when it does it moves everywhere at once.
+   */
+  waterRise = 0;
+  /**
+   * Solids that are not part of any chunk: a shutter that has not rolled up
+   * yet, a door still locked. Owned by whoever put them there.
+   */
+  readonly propBlockers: AABB[] = [];
+
   private scene: THREE.Scene;
   private chunks = new Map<string, ChunkData>();
 
   onChunkLoaded: ((c: ChunkData) => void) | null = null;
   onChunkUnloaded: ((c: ChunkData) => void) | null = null;
 
-  constructor(seed: number, scene: THREE.Scene) {
+  constructor(seed: number, scene: THREE.Scene, depth = 0) {
     this.seed = seed;
     this.scene = scene;
+    this.depth = depth;
+  }
+
+  /**
+   * Move the whole world to another floor. Nothing survives: a level is one
+   * biome end to end, so every chunk currently standing describes the wrong
+   * building.
+   */
+  setDepth(depth: number): void {
+    this.dispose();
+    this.depth = depth;
+    this.waterRise = 0;
+    this.propBlockers.length = 0;
+  }
+
+  /** Raise (or lower) this level's water surface, everywhere, at once. */
+  setWaterRise(metres: number): void {
+    if (metres === this.waterRise) return;
+    this.waterRise = metres;
+    for (const c of this.chunks.values()) {
+      if (c.waterMesh && c.waterY !== null) c.waterMesh.position.y = c.waterY + metres;
+    }
   }
 
   private key(cx: number, cz: number): string {
@@ -87,8 +122,9 @@ export class World {
   }
 
   private loadChunk(cx: number, cz: number): void {
-    const c = generateChunk(this.seed, cx, cz);
-    c.group = buildChunk(this.seed, c);
+    const c = generateChunk(this.seed, this.depth, cx, cz);
+    c.group = buildChunk(c);
+    if (c.waterMesh && c.waterY !== null) c.waterMesh.position.y = c.waterY + this.waterRise;
     this.scene.add(c.group);
     this.chunks.set(this.key(cx, cz), c);
     this.onChunkLoaded?.(c);
@@ -106,11 +142,13 @@ export class World {
   // queries — global cell coordinates: gi = floor(x / CELL)
   // ------------------------------------------------------------------
 
-  biomeAt(x: number, z: number): BiomeDef {
-    const cx = Math.floor(x / CHUNK);
-    const cz = Math.floor(z / CHUNK);
-    const c = this.getChunk(cx, cz);
-    return BIOMES[c ? c.biome : biomeForChunk(this.seed, cx, cz)];
+  /**
+   * The level you are standing on. It no longer depends on where you stand —
+   * a floor is one biome from end to end — but the callers all have a position
+   * to hand and one day one of them might matter again.
+   */
+  biomeAt(_x = 0, _z = 0): BiomeDef {
+    return defForDepth(this.depth);
   }
 
   private cell(gi: number, gj: number): { c: ChunkData; i: number; j: number } | null {
@@ -144,7 +182,7 @@ export class World {
     const gj = Math.floor(z / CELL);
     const r = this.cell(gi, gj);
     if (!r || r.c.waterY === null) return null;
-    return r.c.water[r.j * N + r.i] ? r.c.waterY : null;
+    return r.c.water[r.j * N + r.i] ? r.c.waterY + this.waterRise : null;
   }
 
   /** Wall on the vertical grid line gx, segment gj. */
@@ -228,6 +266,11 @@ export class World {
           out.push({ minX: ci * CELL, maxX: (ci + 1) * CELL, minZ: (cj + 1) * CELL - T, maxZ: (cj + 1) * CELL + T });
         }
       }
+    }
+    // whatever the descent has left standing in the way
+    for (const b of this.propBlockers) {
+      if (b.maxX < x - 2 || b.minX > x + 2 || b.maxZ < z - 2 || b.minZ > z + 2) continue;
+      out.push(b);
     }
   }
 
@@ -374,8 +417,11 @@ export class World {
       const gj = Math.floor(sz / CELL);
       const r = this.cell(gi, gj);
       if (!r) continue;
-      if (r.c.solid[r.j * N + r.i]) continue;
-      if (r.c.water[r.j * N + r.i]) continue;
+      const k = r.j * N + r.i;
+      if (r.c.solid[k]) continue;
+      // a wet floor is fine to stand on; anything you could swim in is not
+      const surface = r.c.waterY === null ? null : r.c.waterY + this.waterRise;
+      if (r.c.water[k] && surface !== null && surface > r.c.floor[k] + 0.55) continue;
       if (filter && !filter(r.c, r.c.biome)) continue;
       const f = r.c.floor[r.j * N + r.i];
       return new THREE.Vector3((gi + 0.5) * CELL, f, (gj + 0.5) * CELL);

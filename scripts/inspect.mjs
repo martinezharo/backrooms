@@ -43,8 +43,8 @@ console.log('T+3s  ', JSON.stringify(await probe()));
 await new Promise((r) => setTimeout(r, 48000));
 console.log('T+51s ', JSON.stringify(await probe()));
 
-// check Level 37 water
-await page.evaluate(() => window.__game.teleportToBiome(2));
+// check the poolrooms' water
+await page.evaluate(() => window.__game.teleportToDepth(2));
 await new Promise((r) => setTimeout(r, 2000));
 console.log('L37   ', JSON.stringify(await probe()));
 

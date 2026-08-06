@@ -31,28 +31,60 @@ anywhere (it's just static files). `pnpm check` runs the type-check alone.
 
 The world seed is in the URL (`?seed=1234`) — share it to share your maze.
 
-## The way out
+## The descent
 
-A run is an extraction, not a walk. Three **fuses** are hidden in chunks
-scattered ~200–290 m from spawn, one per direction, each on a plinth in a
-cleared room you can find by its light. The **field receiver** in your starting
-kit points at the nearest one and ticks faster the closer you get — a bearing,
-not a map.
+The Backrooms are a building, and you are on the top floor of it. **Six levels,
+stacked**, and the only direction that means anything is down. Each floor is one
+biome from wall to wall, endless horizontally, and each one charges a different
+price for the stairs — none of them is the same puzzle twice.
 
-Somewhere else entirely there's the **exit portal**: a hole punched through a
-wall or the floor (50/50), looking straight down onto the real world. Down here
-and down out there were never the same direction. Dormant until you feed it
-fuses — press `R` to swing the receiver onto it.
+| # | Level | The floor | What it wants |
+|---|---|---|---|
+| 1 | **LEVEL 0** | endless yellow rooms, wet carpet, buzzing fluorescents | somewhere the wallpaper has gone **soft**. Find it, lean on it, noclip through |
+| 2 | **LEVEL 1** | the parking under a supermarket that was never built | make **four car alarms** scream at the same time. They only scream for 42 seconds, and every one of them is an invitation |
+| 3 | **LEVEL 37** | tiled pool halls, sunken basins, bounced light | open the **main valve**. The whole level starts filling. Get to the deep end before you have to swim there |
+| 4 | **LEVEL 7** | black water, wall to wall, five metres deep | a **hatch** on the bottom with a seized wheel. Twelve seconds of cranking; you have twenty-two of air |
+| 5 | **LEVEL 2** | concrete maintenance tunnels, pipes, drips | a stairwell door with a **keypad**. Four digits, and the only copy is sprayed on a wall somewhere else down here |
+| 6 | **LEVEL !** | the lobby, remembered wrong | the way out, and it is not down |
+
+The **field receiver** in your starting kit points at whatever this floor needs
+next — the unlock first, then the way down — and ticks faster the closer you
+get. A bearing, not a map.
+
+Every floor takes your bag and your health with you and leaves everything else
+behind: the level you just left is gone, and so is anything you put down in it.
+
+### The bottom
+
+**Level !** is the lobby built by something that only ever saw the lobby from a
+distance — the same wallpaper drained of its warmth, the ceiling too tall, the
+floor never quite level, graffiti on nearly every wall, and pieces of every
+floor you came through lying around in it. A car on the ceiling. A pipe run
+through a bedroom wall. Standing water in the carpet.
+
+It is the only floor with a way *out* instead of a way down. Three **fuses**
+sit on plinths in cleared rooms; somewhere else there's the **exit portal**, a
+hole punched through a wall or the floor (50/50), looking straight down onto
+the real world. Down here and down out there were never the same direction.
+Dormant until you feed it fuses — press `R` to swing the receiver onto it.
 
 - **3 fuses** — the door holds. Full escape.
 - **1 or 2** — it opens anyway, badly. You can leave early if your nerve goes.
 
 Step through and you fall: cloud deck, then open air, then a landscape of
 fields, roads and a town coming up at you far too fast. Every fuse you pull
-also raises the **pressure** — more entities, spawning sooner. The trip back to
-the door is the loudest part of the run.
+also raises the **pressure** — more entities, spawning sooner. So does every
+car alarm, and so does getting the keypad wrong.
 
-Records (escapes, descents, best time, deepest) persist in `localStorage`.
+Records (escapes, descents, best time, deepest floor) persist in `localStorage`.
+
+## Breath
+
+Your head going under starts a clock. **Oxygen** drains in about twenty-two
+seconds, comes back in five at the surface, and once it's empty it takes health
+instead. The bar only appears when it is not full — on four of the six floors it
+never moves. On Level 7 it is the entire game, and on Level 37 it becomes the
+game the moment you turn that valve.
 
 ## Putting it down
 
@@ -65,22 +97,27 @@ kilobyte of `localStorage`: where you stood, what's in the bag and what you did
 to the floor (fuses pulled, items dropped, machines drained, the door fed,
 monsters hugged). Hostile entities aren't saved; the level sends more.
 
+A checkpoint also remembers **which floor you were on** and how far through its
+toll you had got — the water already risen, the wheel already cranked, the code
+already read — so CONTINUE puts you back on Level 37 with the level still
+filling, not back in the lobby.
+
 The checkpoint is for putting the game down, not for undoing it: dying or
 stepping through the portal wipes it, and starting a fresh descent rolls a new
 seed. A `?seed=` in the URL always wins over the saved one.
 
 ## The world
 
-Infinite, chunk-streamed, deterministic from the seed. Four levels blend into
-each other through doorways, each with its own lighting, fog, soundscape and
-architecture:
+Infinite, chunk-streamed, deterministic from the seed — but only sideways. A
+floor is one biome from end to end, so walking never changes the level; the
+only thing that does is paying what the floor asks. Descending tears the whole
+world down and rebuilds it one level lower from the same seed.
 
-| Level | Theme |
-|---|---|
-| **Level 0** | Endless yellow rooms, wet carpet, buzzing fluorescents |
-| **Level 2** | Concrete maintenance tunnels, pipes, darkness, drips |
-| **Level 37** | Tiled pool halls with murky sunken basins — swim to drink fast |
-| **Level 7** | Flooded black rooms, only the ceiling above the water line |
+The cars are boxes and cylinders like everything else here. A downloaded
+hatchback with real topology would be the only object in the game with any,
+which reads worse than a shape that agrees with its surroundings — so they are
+modelled in code, one silhouette in nine paints, which is what a car park
+actually looks like.
 
 ## They are here
 
@@ -110,8 +147,9 @@ the danger.
 
 - **Thirst** drains constantly — and **fast while sprinting**. At zero you
   can't run anymore, and your health starts draining at an accelerating rate.
-- Drink by **crouching at wall taps** (Levels 0/2) or by **submerging** in
-  pool water (much faster).
+- Drink by **crouching at wall taps** (the dry floors) or by **submerging** in
+  water (much faster — and on Level 7 you are always submerged, which is the
+  one mercy that floor gives you).
 - **Glass bottles double as canteens.** Some are found full, some empty. Hold a
   bottle and press `E` at a tap or standing in water to fill it, then hold RMB
   anywhere to drink it back. It still throws just as well when empty.
@@ -127,8 +165,9 @@ knife, glass bottle (throwable canteen), fire extinguisher (stun cloud), pistol
 
 The torch burns through its charge in about five minutes. **Batteries** are
 never carried: walk over one and `E` pours it straight into the torch (+55%),
-and a full torch leaves it on the floor for later. **Almond water machines** in
-Levels 0 and 2 refill your thirst instantly, three servings each. Grid inventory
+and a full torch leaves it on the floor for later. **Almond water machines** on the
+dry floors refill your thirst instantly, three servings each; a machine you
+drained is gone the moment you descend past it. Grid inventory
 (Tarkov-style), 10 weight units max, one item in hand.
 
 A **hotbar** keeps everything reachable without opening the bag: number keys
@@ -145,6 +184,7 @@ item out of the panel to drop it.
 | Space | Jump · swim up (swim against a pool edge to climb out) |
 | C / Ctrl | Crouch · drink at taps · swim down |
 | E | Pick up / interact / fill the held bottle at water |
+| E (held) | Push the soft wall, turn the valve, crank the hatch wheel |
 | LMB | Attack (fists if unarmed) |
 | RMB | Block (melee) / aim (pistol) / drink from the held bottle |
 | 1–9 / 0 | Quick-equip hotbar item (same key again puts it away) |
@@ -152,7 +192,7 @@ item out of the panel to drop it.
 | G | Drop held item |
 | TAB / I | Inventory |
 | F | Torch on/off (recharge it by grabbing batteries) |
-| R | Point the receiver at the fuses / at the exit |
+| R | On Level !: point the receiver at the fuses / at the exit |
 | Esc | Pause |
 
 ### On a phone or tablet
@@ -173,7 +213,7 @@ the layout on a desktop.
 ```
 src/
 ├── core/        Game orchestrator, input, constants, seeded RNG
-├── world/       Chunk streaming, procedural layout, biomes, geometry
+├── world/       Chunk streaming, procedural layout, levels, the descent, geometry
 ├── player/      First-person controller, combat, survival stats
 ├── enemies/     Stalker AI base, the four entities, spawn director, anatomy helpers
 ├── audio/       WebAudio synthesis: SFX, ambiences, cues, procedural score
@@ -181,6 +221,24 @@ src/
 ├── items/       Item defs, grid inventory, world pickups, item meshes
 └── ui/          HUD + hotbar, inventory UI, menus, touch controls, SVG icons
 ```
+
+## Dev hacks
+
+`pnpm dev` loads `.env.development`, which sets `VITE_HACKS=dev` and turns on a
+few shortcuts that exist only for building the game:
+
+| Key | |
+|---|---|
+| `PageDown` / `PageUp` | one floor down / up, skipping that floor's way down |
+| `\` | jump to this floor's way down |
+| `Shift` + `\` | jump to whatever unlocks it (valve, code on a wall) |
+
+It also puts the `window.__game` handle the headless scripts drive on the page.
+
+None of this reaches players: `VITE_HACKS` is inlined at build time, so in a
+production build (`pnpm build`, `pnpm deploy`) the flag is `false`, the handle
+is never attached and the key checks are dropped from the bundle. To get a
+production-shaped build that keeps them, run `VITE_HACKS=dev pnpm build`.
 
 ## Dev scripts
 
@@ -190,7 +248,7 @@ on port 5199 first, e.g. `pnpm dev --port 5199`):
 ```sh
 node scripts/smoke.mjs    # boots the game, walks, opens UI, reports errors
 node scripts/mobile.mjs   # phone viewport: drives the stick, look pad, buttons
-node scripts/tour.mjs     # screenshots all four levels to /tmp
+node scripts/tour.mjs     # screenshots every floor and every way down to /tmp
 node scripts/inspect.mjs  # probes world internals (taps, lights, water, enemies)
 node scripts/escape.mjs   # runs a whole extraction: portal, fuses, the fall
 node scripts/save.mjs     # checkpoint round trip: quit, CONTINUE, compare state

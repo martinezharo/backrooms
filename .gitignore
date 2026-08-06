@@ -7,3 +7,6 @@ dist/
 !.dev.vars.example
 .env*
 !.env.example
+# no secrets in here: it only turns on the dev-only hacks, and Vite never
+# loads it for a production build
+!.env.development

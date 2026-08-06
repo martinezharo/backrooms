@@ -8,7 +8,9 @@
 import type { ItemSnapshot } from '../items/Items';
 
 const KEY = 'backrooms.save.v1';
-const VERSION = 1;
+// 2: the world became a stack of levels instead of a patchwork of biomes, so
+// every v1 save describes a floor plan that no longer exists.
+const VERSION = 2;
 
 export interface PlayerState {
   x: number; y: number; z: number;
@@ -18,8 +20,22 @@ export interface PlayerState {
 export interface StatsState {
   health: number;
   thirst: number;
+  /** breath in the lungs; absent in saves written before there were any */
+  oxygen?: number;
   /** seconds already spent past empty — dehydration accelerates */
   dehydration: number;
+}
+
+/** How far through this floor's toll you had got when you put the game down. */
+export interface DescentState {
+  /** 0..1 — the wall pushed in, the wheel cranked, the valve turned */
+  progress: number;
+  /** the way down is open and waiting */
+  open: boolean;
+  /** metres Level 37's water has risen so far */
+  flood: number;
+  /** you have stood in front of the wall with the digits on it */
+  codeKnown: boolean;
 }
 
 export interface InventoryState {
@@ -44,6 +60,9 @@ export interface SaveGame {
   v: number;
   seed: number;
   savedAt: number;
+  /** which floor you were on: an index into DEPTHS, not a level number */
+  depth: number;
+  descent: DescentState;
   time: number;
   survivalTime: number;
   player: PlayerState;
@@ -69,7 +88,7 @@ export function loadSave(): SaveGame | null {
     if (!raw) return null;
     const s = JSON.parse(raw) as SaveGame;
     // a save from an older build describes a world this one no longer builds
-    if (!s || s.v !== VERSION || !Number.isFinite(s.seed) || !s.player) return null;
+    if (!s || s.v !== VERSION || !Number.isFinite(s.seed) || !s.player || !s.descent) return null;
     return s;
   } catch {
     return null;

@@ -32,6 +32,13 @@ export const BOTTLE_CAPACITY = 45;       // thirst points one full bottle holds
 export const BOTTLE_DRINK_RATE = 26;     // points/s while drinking from a bottle
 export const BOTTLE_FILL_RATE = 40;      // points/s poured in at a tap or in water
 
+// Lungs. One breath is a little over twenty seconds down, and about five
+// seconds at the surface to get it back — long enough that a dive has to be
+// planned, short enough that panicking is the wrong move.
+export const OXYGEN_DRAIN = 4.4;         // points/s while the head is under
+export const OXYGEN_REFILL = 22;         // points/s once you break the surface
+export const DROWN_DAMAGE = 7;           // health/s once the bar is empty
+
 // Torch
 export const BATTERY_CHARGE = 55;        // torch % a scavenged cell puts back
 

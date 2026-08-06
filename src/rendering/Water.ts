@@ -3,13 +3,15 @@
 
 import * as THREE from 'three';
 
-export type WaterKind = 'pool' | 'deep';
+export type WaterKind = 'pool' | 'deep' | 'film';
 
 const TUNING: Record<WaterKind, { shallow: number; deep: number; alpha: number; shimmer: number }> = {
   // chlorinated and backlit: you can see the tiles through it
   pool: { shallow: 0x77ccc6, deep: 0x1a747c, alpha: 0.5, shimmer: 0.55 },
   // you cannot see anything through this and that is the point
   deep: { shallow: 0x1d4a3c, deep: 0x06140f, alpha: 0.86, shimmer: 0.18 },
+  // a centimetre of standing water: almost all of what you see is reflection
+  film: { shallow: 0x8f9584, deep: 0x161a12, alpha: 0.34, shimmer: 0.42 },
 };
 
 const materials: Partial<Record<WaterKind, THREE.ShaderMaterial>> = {};

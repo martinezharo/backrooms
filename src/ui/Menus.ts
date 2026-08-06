@@ -1,6 +1,10 @@
 // Start / pause / game-over / escape screens.
 
 import { formatTime, Records } from '../core/Records';
+import { DEPTHS, BIOMES } from '../world/Biomes';
+
+const levelName = (depth: number): string =>
+  BIOMES[DEPTHS[Math.max(0, Math.min(DEPTHS.length - 1, depth))]].name;
 
 export class Menus {
   private start = document.getElementById('start-screen')!;
@@ -55,14 +59,14 @@ export class Menus {
       : 'no storage in this browser — this run cannot be saved';
   }
 
-  showGameOver(cause: string, survivedSeconds: number, fuses: number): void {
+  showGameOver(cause: string, survivedSeconds: number, depth: number): void {
     this.cause.textContent = cause === 'dehydration'
       ? 'your body gave out. nobody heard it.'
-      : `the ${cause.toLowerCase()} found you.`;
-    const carried = fuses > 0
-      ? ` · ${fuses} fuse${fuses > 1 ? 's' : ''} left on the floor with you`
-      : '';
-    this.stats.textContent = `you survived ${formatTime(survivedSeconds)}${carried}`;
+      : cause === 'drowning'
+        ? 'you ran out of air with the surface still above you.'
+        : `the ${cause.toLowerCase()} found you.`;
+    this.stats.textContent =
+      `you survived ${formatTime(survivedSeconds)} · you got as far as ${levelName(depth)}`;
     this.gameover.classList.remove('hidden');
   }
 
@@ -80,7 +84,7 @@ export class Menus {
       row('escapes', String(records.escapes)),
       row('descents', String(records.runs)),
       row('best time', records.bestSeconds === null ? '—' : formatTime(records.bestSeconds)),
-      row('deepest', `${records.deepest} m`),
+      row('deepest floor', levelName(records.deepestLevel)),
     ].join('');
 
     this.escape.classList.remove('hidden');
@@ -92,6 +96,6 @@ export class Menus {
     this.landingRecords.classList.remove('hidden');
     this.landingRecords.textContent = r.escapes > 0
       ? `${r.escapes} escape${r.escapes > 1 ? 's' : ''} · ${r.runs} descents · best ${r.bestSeconds === null ? '—' : formatTime(r.bestSeconds)}`
-      : `${r.runs} descent${r.runs > 1 ? 's' : ''} · never made it out`;
+      : `${r.runs} descent${r.runs > 1 ? 's' : ''} · deepest ${levelName(r.deepestLevel)} · never made it out`;
   }
 }

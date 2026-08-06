@@ -4,7 +4,8 @@ import { itemIcon } from './icons';
 
 export interface ObjectiveView {
   title: string;
-  fuses: number;
+  /** how much of this floor's toll has been paid */
+  done: number;
   total: number;
   /** angle to the target relative to where you're looking, or null with no receiver */
   bearing: number | null;
@@ -24,6 +25,8 @@ export class HUD {
   private fps = document.getElementById('fps-counter')!;
   private biome = document.getElementById('biome-label')!;
   private damageVignette = document.getElementById('damage-vignette')!;
+  private fadeVeil = document.getElementById('fade-veil')!;
+  private lastFade = -Infinity;
   private hotbar = document.getElementById('hotbar')!;
   private friendSpeech = document.getElementById('friend-speech')!;
   private heartBurst = document.getElementById('heart-burst')!;
@@ -34,6 +37,13 @@ export class HUD {
   private objDist = document.getElementById('objective-dist')!;
   private torchRow = document.getElementById('torch-row')!;
   private torchFill = document.getElementById('torch-fill')!;
+  private oxygenRow = document.getElementById('oxygen-row')!;
+  private oxygenFill = document.getElementById('oxygen-fill')!;
+  private levelCard = document.getElementById('level-card')!;
+  private levelCardName = document.getElementById('level-card-name')!;
+  private levelCardTag = document.getElementById('level-card-tag')!;
+  private levelCardTimer: number | null = null;
+  private lastOxygen = -Infinity;
   private friendSpeechTimer: number | null = null;
   private hotbarSig = '';
   private pipCount = -1;
@@ -100,7 +110,7 @@ export class HUD {
       }
     }
     for (let i = 0; i < this.objPips.children.length; i++) {
-      this.objPips.children[i].classList.toggle('filled', i < o.fuses);
+      this.objPips.children[i].classList.toggle('filled', i < o.done);
     }
 
     if (o.bearing !== null) {
@@ -127,6 +137,41 @@ export class HUD {
     if (this.torchFill.classList.contains('critical') !== critical) {
       this.torchFill.classList.toggle('critical', critical);
     }
+  }
+
+  /**
+   * Breath. Hidden while it's full: a bar that is always there stops being
+   * information, and on five of the six floors it would never move.
+   */
+  setOxygen(oxygen: number): void {
+    const hidden = oxygen >= 99.5;
+    if (this.oxygenRow.classList.contains('hidden') !== hidden) {
+      this.oxygenRow.classList.toggle('hidden', hidden);
+    }
+    if (hidden) return;
+    if (Math.abs(oxygen - this.lastOxygen) >= 0.25) {
+      this.lastOxygen = oxygen;
+      (this.oxygenFill as HTMLElement).style.width = `${Math.max(0, oxygen)}%`;
+    }
+    const critical = oxygen < 30;
+    if (this.oxygenFill.classList.contains('critical') !== critical) {
+      this.oxygenFill.classList.toggle('critical', critical);
+    }
+  }
+
+  /** The card that tells you which floor just took you. */
+  showLevelCard(name: string, tagline: string): void {
+    this.levelCardName.textContent = name;
+    this.levelCardTag.textContent = tagline;
+    this.levelCard.classList.remove('hidden');
+    // one frame with the element laid out but still transparent, so the
+    // opacity transition has something to run from
+    requestAnimationFrame(() => this.levelCard.classList.add('visible'));
+    if (this.levelCardTimer !== null) clearTimeout(this.levelCardTimer);
+    this.levelCardTimer = window.setTimeout(() => {
+      this.levelCard.classList.remove('visible');
+      this.levelCardTimer = window.setTimeout(() => this.levelCard.classList.add('hidden'), 1500);
+    }, 3800);
   }
 
   setPrompt(text: string | null): void {
@@ -213,6 +258,13 @@ export class HUD {
     if (value === this.lastDamage) return;
     this.lastDamage = value;
     (this.damageVignette as HTMLElement).style.opacity = String(value);
+  }
+
+  /** Black over everything, for the seconds between one floor and the next. */
+  setFade(alpha: number): void {
+    if (Math.abs(alpha - this.lastFade) < 0.004 && alpha !== 0 && alpha !== 1) return;
+    this.lastFade = alpha;
+    (this.fadeVeil as HTMLElement).style.opacity = String(alpha);
   }
 
   announceBiome(name: string): void {

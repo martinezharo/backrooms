@@ -23,9 +23,15 @@ type EnemyCtor = new () => Enemy;
 
 const WEIGHTS: Record<BiomeId, [EnemyCtor, number][]> = {
   [BiomeId.Level0]: [[Partygoer, 0.45], [Hound, 0.25], [SkinStealer, 0.2], [Smiler, 0.1]],
+  // A slab you can see all the way across is hound country: they come at you
+  // down an aisle from a very long way off, and there is nowhere to break line.
+  [BiomeId.Level1]: [[Hound, 0.5], [Smiler, 0.3], [SkinStealer, 0.2]],
   [BiomeId.Level2]: [[Hound, 0.4], [Smiler, 0.35], [SkinStealer, 0.25]],
   [BiomeId.Level37]: [[SkinStealer, 0.5], [Smiler, 0.3], [Hound, 0.2]],
-  [BiomeId.Level7]: [[Smiler, 0.7], [SkinStealer, 0.3]],
+  // Nothing walks on Level 7. The water is what is trying to kill you there,
+  // and it does not need help.
+  [BiomeId.Level7]: [],
+  [BiomeId.LevelRun]: [[Partygoer, 0.3], [Hound, 0.3], [SkinStealer, 0.2], [Smiler, 0.2]],
 };
 
 /** Only friends are ever restored, so the save keeps a name, not a class. */
@@ -118,6 +124,7 @@ export class Spawner {
     if (!spot) return;
     const biome = this.world.biomeAt(spot.x, spot.z).id;
     const table = WEIGHTS[biome];
+    if (!table.length) return; // a floor with nothing living on it
     let r = Math.random();
     let Ctor: EnemyCtor = table[0][0];
     for (const [cls, w] of table) {

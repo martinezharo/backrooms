@@ -15,20 +15,26 @@ import { Lighting } from '../rendering/Lighting';
 import { PostFX } from '../rendering/PostFX';
 import { updateWater } from '../rendering/Water';
 import { Escape } from '../rendering/Escape';
-import { BiomeId, BIOMES, biomeForChunk } from '../world/Biomes';
+import { BiomeId, BIOMES, LAST_DEPTH, defForDepth } from '../world/Biomes';
+import { CarSpot } from '../world/Chunk';
+import {
+  DescentManager, chunkCentre, descentKind, descentLayout,
+} from '../world/Descent';
 import { FUSE_COUNT, objectiveLayout } from '../world/Objective';
 import { PortalManager } from '../world/Portal';
 import { World } from '../world/World';
 import {
-  BATTERY_CHARGE, BOTTLE_CAPACITY, BOTTLE_DRINK_RATE, CHUNK, RUN_SPEED,
+  BATTERY_CHARGE, BOTTLE_CAPACITY, BOTTLE_DRINK_RATE, CHUNK, PLAYER_HEIGHT, RUN_SPEED,
 } from './constants';
 import { HUD, ObjectiveView } from '../ui/HUD';
 import { InventoryUI } from '../ui/InventoryUI';
+import { Keypad } from '../ui/Keypad';
 import { Menus } from '../ui/Menus';
 import { TouchControls } from '../ui/TouchControls';
+import { DEV_HACKS } from './dev';
 import { Input } from './Input';
-import { loadRecords, noteDepth, noteEscape, noteRunStarted } from './Records';
-import { clearSave, loadSave, SaveGame, writeSave } from './Save';
+import { loadRecords, noteDepth, noteEscape, noteLevel, noteRunStarted } from './Records';
+import { clearSave, DescentState, loadSave, SaveGame, writeSave } from './Save';
 import { getRenderQuality } from '../rendering/Quality';
 
 type GameState = 'menu' | 'playing' | 'paused' | 'dead' | 'escaping' | 'escaped';
@@ -42,6 +48,27 @@ const TORCH_DRAIN = 100 / 300;
 const VENDING_SERVINGS = 3;
 /** seconds between autosaves — the checkpoint is never more than this stale */
 const AUTOSAVE_EVERY = 20;
+
+// ---- what each floor charges to let you through ----
+/** seconds of leaning on the soft place before Level 0 gives up */
+const SOFTWALL_PUSH = 3.2;
+/** alarms that have to be going off at the same time to wake the shutter */
+const ALARMS_NEEDED = 4;
+/** how long one car keeps screaming before it gives up and re-arms */
+const ALARM_TIME = 42;
+/** seconds of turning the main valve before the poolrooms start filling */
+const VALVE_TURN = 3.4;
+/** metres Level 37's water climbs once it is running, and how fast */
+const FLOOD_HEIGHT = 2.6;
+const FLOOD_RATE = 2.6 / 50;
+/** the water has to be over the rim before the drain has anything to pull with */
+const FLOOD_OPENS_DRAIN = 1.6;
+/** seconds of cranking the hatch wheel — more than one breath holds */
+const HATCH_CRANK = 12;
+/** seconds of black between one floor and the next */
+const FADE_TIME = 1.5;
+
+const EMPTY_DESCENT: DescentState = { progress: 0, open: false, flood: 0, codeKnown: false };
 
 export class Game {
   private state: GameState = 'menu';
@@ -80,6 +107,21 @@ export class Game {
   private message = '';
   private messageTimer = 0;
 
+  // ---- the way down ----
+  /** index into DEPTHS: which floor of the building is under your feet */
+  private depth = 0;
+  private descent: DescentState = { ...EMPTY_DESCENT };
+  private descentMgr: DescentManager;
+  private keypad = new Keypad();
+  /** car id → seconds of screaming left in it */
+  private alarms = new Map<string, number>();
+  /** 0 = playing, 1 = fully black; sign of `fadeDir` says which way it's going */
+  private fade = 0;
+  private fadeDir = 0;
+  private pendingDepth = -1;
+  /** the Esc that closed the keypad must not also open the pause menu */
+  private swallowEscape = false;
+
   // ---- the way out ----
   private portals: PortalManager;
   private escape = new Escape();
@@ -93,6 +135,14 @@ export class Game {
   private stopped = false;
   private pingTimer = 0;
   private depthTimer = 0;
+  /** throttles the metal-on-metal groan while something is being cranked */
+  private valveGroan = 0;
+  /** seconds until the live car alarms all yelp again */
+  private alarmChirp = 0;
+  /** seconds until the next beat, once the breath is nearly gone */
+  private heartTimer = 0;
+  /** 0..1 — how much noise you have made lately; decays over about a minute */
+  private noiseHeat = 0;
   private readonly viewDirection = new THREE.Vector3();
   private readonly enemyOffset = new THREE.Vector3();
 
@@ -123,6 +173,8 @@ export class Game {
     this.world = new World(seed, this.scene);
     this.pickups = new Pickups(this.scene, this.world);
     this.portals = new PortalManager(this.scene, this.world, seed);
+    this.descentMgr = new DescentManager(this.scene, this.world, descentLayout(seed, 0).code);
+    this.audio.attachStage(this.scene);
     this.lighting = new Lighting(this.scene, this.world, this.quality);
     this.combat = new Combat(this.scene, this.player, this.inventory);
     this.spawner = new Spawner(this.scene, this.world);
@@ -196,8 +248,27 @@ export class Game {
       this.input.exitPointerLock();
       this.touch.setActive(false);
       this.invUI.setOpen(false);
+      this.keypad.hide();
       this.hud.setPrompt(null);
-      this.menus.showGameOver(cause, this.survivalTime, this.fuseCount());
+      this.menus.showGameOver(cause, this.survivalTime, this.depth);
+    };
+    this.stats.onBreath = () => this.audio.playSfx('gasp', 0.55);
+
+    this.keypad.onKey = (ok) => this.audio.playSfx(ok ? 'beep' : 'deny', 0.5);
+    this.keypad.onSubmit = (entered) => {
+      const right = entered === descentLayout(this.seed, this.depth).code;
+      if (right) this.openTheWayDown();
+      else this.noiseHeat = Math.min(1, this.noiseHeat + 0.45); // it was listening
+      return right;
+    };
+    this.keypad.onClose = () => {
+      // Esc closes the pad through its own listener, and the same key press is
+      // still sitting in the input buffer this frame — without this it would
+      // close the pad and open the pause menu in one keystroke.
+      this.swallowEscape = true;
+      if (this.state !== 'playing') return;
+      this.touch.setActive(true);
+      void this.input.requestPointerLock();
     };
 
     this.combat.onSound = (s: CombatSound) => {
@@ -261,6 +332,14 @@ export class Game {
     // a save describes one maze; a different seed is a different maze
     const resumed = save && save.seed === this.seed ? save : null;
 
+    this.depth = resumed ? Math.max(0, Math.min(LAST_DEPTH, resumed.depth)) : 0;
+    this.descent = resumed ? { ...EMPTY_DESCENT, ...resumed.descent } : { ...EMPTY_DESCENT };
+    this.alarms.clear();
+    this.world.setDepth(this.depth);
+    this.world.setWaterRise(this.descent.flood);
+    this.portals.reset();
+    this.descentMgr.reset(descentLayout(this.seed, this.depth).code);
+
     // Everything the chunk loader consults has to be back in place before the
     // first chunk exists: taken spawns, items left on the floor, the door.
     this.pickups.reset();
@@ -290,6 +369,7 @@ export class Game {
       this.vendingLeft = new Map(resumed.vending);
       this.escapeFuses = resumed.escapeFuses;
       this.portalOpened = resumed.portalOpen;
+      if (this.descent.open) this.descentMgr.clearBlocker();
       this.flashMessage('YOU WERE HERE BEFORE');
     } else {
       this.player.reset(SPAWN_X, SPAWN_Z);
@@ -314,6 +394,11 @@ export class Game {
     }
     this.combat.reset();
     this.saveTimer = AUTOSAVE_EVERY;
+    this.fade = 0;
+    this.fadeDir = 0;
+    this.pendingDepth = -1;
+    this.hud.setFade(0);
+    this.hud.showLevelCard(defForDepth(this.depth).name, defForDepth(this.depth).tagline);
 
     this.hud.show(true);
     this.state = 'playing';
@@ -331,6 +416,8 @@ export class Game {
   private saveRun(): boolean {
     return writeSave({
       seed: this.seed,
+      depth: this.depth,
+      descent: this.descent,
       time: this.time,
       survivalTime: this.survivalTime,
       player: this.player.saveState(),
@@ -349,6 +436,7 @@ export class Game {
 
   private pauseGame(): void {
     if (this.state !== 'playing') return;
+    this.keypad.hide();
     const saved = this.saveRun();
     this.state = 'paused';
     // Esc usually drops the lock itself, but not every route into the pause
@@ -431,10 +519,14 @@ export class Game {
 
   private updatePlaying(dt: number): void {
     const p = this.player;
-    const uiOpen = this.invUI.open;
+    const uiOpen = this.invUI.open || this.keypad.open;
+    // between floors nothing is yours to drive: the fall takes the frame
+    this.updateTransition(dt);
+    const falling = this.fadeDir !== 0;
 
     // ---- toggles ----
-    if (this.input.pressed('Escape') && !uiOpen) this.pauseGame();
+    if (this.input.pressed('Escape') && !uiOpen && !this.swallowEscape) this.pauseGame();
+    this.swallowEscape = false;
     if (this.input.pressed('Tab') || this.input.pressed('KeyI')) {
       const open = this.invUI.toggle();
       this.expectUnlock = open;
@@ -460,20 +552,25 @@ export class Game {
     }
     // secret: hug the monster standing next to you
     if (this.input.pressed('KeyH') && !uiOpen) this.tryHug();
+    if (DEV_HACKS && !uiOpen) this.updateDevHacks();
     if (!uiOpen) this.updateQuickSelect();
 
     // ---- world streaming ----
     this.world.update(p.position.x, p.position.z);
 
-    // ---- player & combat (frozen while the inventory overlay is open) ----
-    if (!uiOpen) {
+    // ---- player & combat (frozen while an overlay is open, or mid-fall) ----
+    if (!uiOpen && !falling) {
       p.canRun = this.stats.thirst > 0;
       p.update(dt, this.input, this.world);
       this.combat.update(dt, this.input, p, this.world, this.spawner.enemies);
     }
 
     // ---- interactions ----
-    let prompt: string | null = null;
+    // The way down speaks first. Everything else in reach — a battery on the
+    // floor, a tap, a vending machine — waits until it has nothing to say, so
+    // one press of E can never mean two things at once.
+    const descentPrompt = falling ? null : this.updateDescent(dt, uiOpen);
+    let prompt: string | null = descentPrompt;
     let drinkingTap = false;
 
     // the door out takes priority over anything else you could be touching
@@ -492,7 +589,7 @@ export class Game {
       }
     }
 
-    const pickup = this.pickups.nearest(p.position, 2.1);
+    const pickup = descentPrompt ? null : this.pickups.nearest(p.position, 2.1);
     if (pickup && !uiOpen && !atPortal) {
       // Batteries are never carried: grabbing one empties it into the torch
       // there and then. A full torch leaves it where it is, unspent.
@@ -522,7 +619,7 @@ export class Game {
     }
 
     // almond water machines: instant, but only a few servings each
-    const vend = atPortal ? null : this.nearestVending(1.9);
+    const vend = atPortal || descentPrompt ? null : this.nearestVending(1.9);
     if (vend && !pickup) {
       const left = this.vendingLeft.get(vend.id) ?? VENDING_SERVINGS;
       if (left > 0) {
@@ -541,8 +638,8 @@ export class Game {
     // taps: crouch nearby to drink, or top the bottle up standing
     const bottle = this.equippedBottle();
     const canFill = !!bottle && bottle.water < BOTTLE_CAPACITY;
-    const tap = this.nearestTap(1.5);
-    const atSource = !pickup && !vend && !atPortal && (!!tap || p.inWater);
+    const tap = descentPrompt ? null : this.nearestTap(1.5);
+    const atSource = !pickup && !vend && !atPortal && !descentPrompt && (!!tap || p.inWater);
     if (tap && !pickup && !vend && !atPortal) {
       if (p.crouching) {
         drinkingTap = true;
@@ -597,7 +694,15 @@ export class Game {
 
     // ---- survival ----
     const submerged = p.underwater || (p.inWater && p.swimming);
-    this.stats.update(dt, p.running, drinkingTap, submerged);
+    this.stats.update(dt, p.running, drinkingTap, submerged, p.underwater);
+    // the last few seconds of a breath are all you can hear
+    if (this.stats.oxygen < 32 && p.underwater) {
+      this.heartTimer -= dt;
+      if (this.heartTimer <= 0) {
+        this.heartTimer = 0.55 + (this.stats.oxygen / 100) * 1.2;
+        this.audio.playSfx('heartbeat', 0.5 + (1 - this.stats.oxygen / 32) * 0.4, 0.02);
+      }
+    }
     if (submerged) {
       this.gulpTimer -= dt;
       if (this.gulpTimer <= 0 && this.stats.thirst < 99) {
@@ -659,6 +764,10 @@ export class Game {
     updateWater(this.time);
     this.pickups.update(this.time);
     this.portals.update(this.time, dt);
+    this.descentMgr.update(
+      { progress: this.descent.progress, open: this.descent.open, time: this.time, dt },
+      this.descent.progress,
+    );
     this.postfx.setUnderwater(p.underwater);
     this.audio.setMuffled(p.underwater);
     this.audio.update(dt);
@@ -669,7 +778,17 @@ export class Game {
     this.music.update();
 
     // ---- objective ----
-    this.spawner.setPressure(this.takenFuses() / FUSE_COUNT);
+    // How aware the floor is of what you are doing to it. On the last floor
+    // that's fuses pulled; on the others it's how far through its own toll you
+    // have got — and on Level 1 it is quite literally how much noise you are
+    // making, which drops back down as the alarms give up.
+    this.noiseHeat = Math.max(0, this.noiseHeat - dt / 40);
+    this.spawner.setPressure(Math.min(1, this.noiseHeat + (this.depth === LAST_DEPTH
+      ? this.takenFuses() / FUSE_COUNT
+      : this.descent.open ? 1
+        : descentKind(this.depth) === 'shutter'
+          ? this.liveAlarms() / ALARMS_NEEDED
+          : this.descent.progress * 0.6)));
     this.updateObjective(dt);
     this.depthTimer -= dt;
     if (this.depthTimer <= 0) {
@@ -685,6 +804,7 @@ export class Game {
 
     // ---- HUD ----
     this.hud.setBars(this.stats.health, this.stats.thirst);
+    this.hud.setOxygen(this.stats.oxygen);
     this.hud.setTorch(this.inventory.has('flashlight') ? this.torchCharge : null);
     this.damageOverlay = Math.max(0, this.damageOverlay - dt * 1.4);
     this.hud.setDamageOverlay(this.damageOverlay * 0.8 + danger * 0.15);
@@ -720,6 +840,306 @@ export class Game {
 
   }
 
+  // -------------------------------------------------------- the way down
+
+  /** The prop this floor's exit is attached to, if its chunk is loaded. */
+  private get descentProp() {
+    return this.descentMgr.prop;
+  }
+
+  /** Where the receiver points on this floor. */
+  private descentTarget(): THREE.Vector3 | null {
+    const layout = descentLayout(this.seed, this.depth);
+    const kind = descentKind(this.depth);
+    // the unlock first, the way down second — you cannot use one without the other
+    const needsSub = (kind === 'drain' && this.descent.progress < 1)
+      || (kind === 'door' && !this.descent.codeKnown);
+    if (needsSub && layout.sub) {
+      return this.descentMgr.sub?.position.clone()
+        ?? chunkCentre(layout.sub.cx, layout.sub.cz);
+    }
+    return this.descentProp?.target.clone() ?? chunkCentre(layout.exit.cx, layout.exit.cz);
+  }
+
+  private liveAlarms(): number {
+    return this.alarms.size;
+  }
+
+  /** The nearest parked car, for hitting. */
+  private nearestCar(maxDist: number): CarSpot | null {
+    const p = this.player.position;
+    let best: CarSpot | null = null;
+    let bestD = maxDist * maxDist;
+    for (const c of this.world.allChunks()) {
+      for (const car of c.cars) {
+        if (car.inverted) continue; // that one is on the ceiling, and it is not your problem
+        const dx = car.x - p.x;
+        const dz = car.z - p.z;
+        const d = dx * dx + dz * dz;
+        if (d < bestD) { bestD = d; best = car; }
+      }
+    }
+    return best;
+  }
+
+  /**
+   * The floor has agreed. Everything that was in the way gets out of it, once,
+   * loudly — the noise is the point, because everything else down here heard it.
+   */
+  private openTheWayDown(): void {
+    if (this.descent.open) return;
+    this.descent.open = true;
+    this.descentMgr.clearBlocker();
+    switch (descentKind(this.depth)) {
+      case 'shutter':
+        this.audio.playSfx('shutter', 0.8, 0.02);
+        this.flashMessage('THE RAMP IS OPEN. GO DOWN.');
+        break;
+      case 'door':
+        this.audio.playSfx('clunk', 0.7);
+        this.flashMessage('THE DOOR IS OPEN. THE STAIRS GO DOWN.');
+        break;
+      case 'hatch':
+        this.audio.playSfx('clunk', 0.8);
+        this.flashMessage('THE HATCH GIVES');
+        break;
+      case 'drain':
+        this.audio.playSfx('valve', 0.6);
+        this.flashMessage('THE GRATE HAS OPENED. IT WANTS YOU DOWN THERE.');
+        break;
+      default:
+        break;
+    }
+    this.music.spike();
+  }
+
+  /**
+   * Everything this floor asks of you, per frame. Returns the prompt it wants
+   * on screen, or null if it has nothing to say from where you're standing.
+   */
+  private updateDescent(dt: number, uiOpen: boolean): string | null {
+    if (this.depth >= LAST_DEPTH) return null;
+    const p = this.player.position;
+    const kind = descentKind(this.depth);
+    const prop = this.descentProp;
+    const holdE = !uiOpen && this.input.down('KeyE');
+    let prompt: string | null = null;
+
+    // ---- the sub-landmark: the wheel that floods a level, the wall that
+    //      somebody wrote a door code on ----
+    const sub = this.descentMgr.sub;
+    if (sub) {
+      const d = sub.position.distanceTo(p);
+      if (sub.spot.kind === 'code' && d < 4.5 && !this.descent.codeKnown) {
+        this.descent.codeKnown = true;
+        this.audio.playSfx('click', 0.4);
+        this.flashMessage(`${descentLayout(this.seed, this.depth).code} — DON'T WRITE IT DOWN`);
+      }
+      if (sub.spot.kind === 'valve' && d < 2.3 && this.descent.progress < 1) {
+        prompt = 'HOLD E — THE MAIN VALVE';
+        if (holdE) {
+          this.descent.progress = Math.min(1, this.descent.progress + dt / VALVE_TURN);
+          prompt = `TURNING…  ${Math.round(this.descent.progress * 100)}%`;
+          if (this.valveGroan <= 0) {
+            this.valveGroan = 0.9;
+            this.audio.playSfx('valve', 0.4);
+          }
+          if (this.descent.progress >= 1) {
+            this.audio.playSfx('flood', 0.75, 0.02);
+            this.music.spike();
+            this.flashMessage('IT IS COMING UP THROUGH THE FLOOR. FIND THE DEEP END.');
+          }
+        }
+      }
+    }
+    this.valveGroan -= dt;
+
+    // ---- Level 37 fills up, once, from wherever you happen to be standing ----
+    if (kind === 'drain' && this.descent.progress >= 1 && this.descent.flood < FLOOD_HEIGHT) {
+      this.descent.flood = Math.min(FLOOD_HEIGHT, this.descent.flood + FLOOD_RATE * dt);
+      this.world.setWaterRise(this.descent.flood);
+      if (this.descent.flood >= FLOOD_OPENS_DRAIN) this.openTheWayDown();
+    }
+
+    // ---- Level 1: the cars, and how loud you can make them ----
+    if (kind === 'shutter') {
+      for (const [id, left] of this.alarms) {
+        if (left - dt <= 0) this.alarms.delete(id);
+        else this.alarms.set(id, left - dt);
+      }
+      this.alarmChirp -= dt;
+      if (this.alarms.size > 0 && this.alarmChirp <= 0) {
+        this.alarmChirp = 2.4;
+        for (const c of this.world.allChunks()) {
+          for (const car of c.cars) {
+            if (!this.alarms.has(car.id)) continue;
+            this.audio.playSfxAt('carAlarm', new THREE.Vector3(car.x, 1.2, car.z), 0.55, 9);
+          }
+        }
+      }
+      if (!this.descent.open) {
+        const car = this.nearestCar(2.9);
+        if (car && !prompt) {
+          const live = this.alarms.has(car.id);
+          prompt = live
+            ? `ALREADY SCREAMING · ${this.liveAlarms()}/${ALARMS_NEEDED}`
+            : `E — SET THE ALARM OFF (${this.liveAlarms()}/${ALARMS_NEEDED})`;
+          if (!live && !uiOpen && this.input.pressed('KeyE')) {
+            this.alarms.set(car.id, ALARM_TIME);
+            this.alarmChirp = 0;
+            this.audio.playSfxAt('carAlarm', new THREE.Vector3(car.x, 1.2, car.z), 0.75, 9);
+            if (this.liveAlarms() >= ALARMS_NEEDED) this.openTheWayDown();
+            else this.flashMessage(`${this.liveAlarms()} OF ${ALARMS_NEEDED} · THEY DON'T SCREAM FOR LONG`);
+          }
+        }
+      }
+    }
+
+    if (!prop) return prompt;
+    const toProp = prop.target.distanceTo(p);
+
+    // ---- the way down itself ----
+    switch (kind) {
+      case 'softwall': {
+        if (toProp < 2.2 && !this.descent.open) {
+          prompt = this.descent.progress > 0
+            ? `PUSHING…  ${Math.round(this.descent.progress * 100)}%`
+            : 'HOLD E — THE WALL IS SOFT HERE';
+          if (holdE) {
+            this.descent.progress = Math.min(1, this.descent.progress + dt / SOFTWALL_PUSH);
+            if (this.descent.progress >= 1) {
+              this.audio.playSfx('crumble', 0.85);
+              this.openTheWayDown();
+              this.beginDescend();
+            }
+          } else {
+            // let go and the wall pushes back, slowly
+            this.descent.progress = Math.max(0, this.descent.progress - dt * 0.35);
+          }
+        }
+        break;
+      }
+      case 'shutter':
+      case 'door': {
+        if (this.descent.open && toProp < 2.4) this.beginDescend();
+        else if (kind === 'door' && !this.descent.open && toProp < 3.2) {
+          prompt = this.descent.codeKnown
+            ? `E — KEYPAD (${descentLayout(this.seed, this.depth).code})`
+            : 'E — KEYPAD · FOUR DIGITS YOU DO NOT HAVE';
+          if (!uiOpen && !this.keypad.open && this.input.pressed('KeyE')) {
+            this.keypad.show();
+            this.expectUnlock = true;
+            this.input.exitPointerLock();
+            this.touch.setActive(false);
+          }
+        } else if (kind === 'shutter' && !this.descent.open && toProp < 6) {
+          prompt = `THE SHUTTER IS DOWN · ${this.liveAlarms()}/${ALARMS_NEEDED} ALARMS`;
+        }
+        break;
+      }
+      case 'drain': {
+        if (this.descent.open && toProp < 2.6 && this.player.underwater) this.beginDescend();
+        else if (toProp < 3.2 && !this.descent.open) {
+          prompt = this.descent.progress >= 1
+            ? 'THE GRATE IS STILL SHUT — IT NEEDS MORE WATER'
+            : 'A DRAIN, AND NOTHING TO PULL IT · FIND THE MAIN VALVE';
+        }
+        break;
+      }
+      case 'hatch': {
+        if (this.descent.open) {
+          if (toProp < 1.8) this.beginDescend();
+          else if (toProp < 4) prompt = 'THE HATCH IS OPEN — SWIM DOWN INTO IT';
+        } else if (toProp < 2.6) {
+          if (!this.player.underwater) {
+            prompt = 'THE HATCH IS DOWN THERE — YOU HAVE TO GO UNDER';
+          } else {
+            prompt = `HOLD E — THE WHEEL IS SEIZED  ${Math.round(this.descent.progress * 100)}%`;
+            if (holdE) {
+              this.descent.progress = Math.min(1, this.descent.progress + dt / HATCH_CRANK);
+              if (this.valveGroan <= 0) {
+                this.valveGroan = 1.1;
+                this.audio.playSfx('valve', 0.35);
+              }
+              if (this.descent.progress >= 1) this.openTheWayDown();
+            }
+          }
+        }
+        break;
+      }
+      default:
+        break;
+    }
+    return prompt;
+  }
+
+  /** Start the fall to the next floor: black out, then rebuild the world. */
+  private beginDescend(): void {
+    if (this.fadeDir !== 0 || this.depth >= LAST_DEPTH) return;
+    this.pendingDepth = this.depth + 1;
+    this.fadeDir = 1;
+    this.keypad.hide();
+    this.invUI.setOpen(false);
+    this.audio.playSfx('whoosh', 0.7, 0.02);
+    this.audio.stopWading();
+  }
+
+  /** The seconds of black, and the swap that happens in the middle of them. */
+  private updateTransition(dt: number): void {
+    if (this.fadeDir === 0) return;
+    this.fade = Math.max(0, Math.min(1, this.fade + (this.fadeDir * dt) / FADE_TIME));
+    this.hud.setFade(this.fade);
+    if (this.fadeDir > 0 && this.fade >= 1) {
+      this.enterLevel(this.pendingDepth);
+      this.pendingDepth = -1;
+      this.fadeDir = -1;
+    } else if (this.fadeDir < 0 && this.fade <= 0) {
+      this.fadeDir = 0;
+    }
+  }
+
+  /**
+   * Build the next floor under the player. The bag comes with you and so does
+   * whatever is left of your health; nothing else does — the level you just
+   * left is gone, and so is everything you put down in it.
+   */
+  private enterLevel(depth: number): void {
+    this.depth = depth;
+    const def = defForDepth(depth);
+    this.descent = { ...EMPTY_DESCENT };
+    this.alarms.clear();
+    this.vendingLeft.clear();
+
+    this.world.setDepth(depth);
+    this.pickups.reset();
+    this.spawner.reset();
+    this.portals.reset();
+    this.descentMgr.reset(descentLayout(this.seed, depth).code);
+    this.escapeFuses = 0;
+    this.portalOpened = false;
+
+    this.world.preload(SPAWN_X, SPAWN_Z);
+    this.player.reset(SPAWN_X, SPAWN_Z);
+    // You arrive the way the last floor spat you out: on your feet, through
+    // the ceiling, or head-first into water. Spawn just under the ceiling
+    // rather than through it — the controller pushes you back down out of
+    // solid roof, and that reads as a stumble, not a fall.
+    if (def.arrival !== 'stand') {
+      this.player.position.y = def.ceiling - PLAYER_HEIGHT - 0.06;
+      // the torrent has been carrying you for a while before the level catches
+      // you; the water bleeds it off over the first second or so of the dive
+      this.player.velocity.y = def.arrival === 'plunge' ? -11 : -2;
+    }
+    this.stats.oxygen = 100;
+    this.combat.reset();
+
+    if (def.arrival === 'plunge') this.audio.playSfx('flood', 0.7, 0.02);
+    if (def.arrival === 'drop') this.audio.playSfx('splash', 0.5);
+    this.hud.showLevelCard(def.name, def.tagline);
+    noteLevel(depth);
+    this.saveRun();
+  }
+
   // ------------------------------------------------------ the objective
 
   /** Fuses currently in the bag — the only ones that count at the door. */
@@ -743,15 +1163,21 @@ export class Game {
    * arrow reads like a compass needle rather than a map marker.
    */
   private updateObjective(dt: number): void {
-    const layout = objectiveLayout(this.seed);
-    const remaining = layout.fuses.filter((f) => !this.pickups.isConsumed(`fuse:${f.cx},${f.cz}`));
-    const onExit = this.receiverOnExit || remaining.length === 0;
     const hasReceiver = !!this.inventory.has('detector');
-    const carried = this.fuseCount();
     const p = this.player.position;
+    const last = this.depth === LAST_DEPTH;
+
+    const layout = objectiveLayout(this.seed);
+    const remaining = last
+      ? layout.fuses.filter((f) => !this.pickups.isConsumed(`fuse:${f.cx},${f.cz}`))
+      : [];
+    const onExit = this.receiverOnExit || remaining.length === 0;
+    const carried = this.fuseCount();
 
     let target: THREE.Vector3 | null = null;
-    if (onExit) {
+    if (!last) {
+      target = this.descentTarget();
+    } else if (onExit) {
       target = this.portals.portal?.center.clone()
         ?? this.chunkCentre(layout.exit.cx, layout.exit.cz);
     } else {
@@ -783,21 +1209,75 @@ export class Game {
     }
 
     const key = hasReceiver ? '  [R]' : '';
-    const open = this.portals.portal?.isOpen ?? false;
-    const title = open ? `THE DOOR IS OPEN${key}`
-      : onExit ? (carried > 0 ? `GET TO THE DOOR${key}` : `THE DOOR IS DEAD${key}`)
-        : `FIND THE FUSES${key}`;
-
-    const view: ObjectiveView = {
-      title,
-      // once they're in the door they stay spent, not lost
-      fuses: open ? this.escapeFuses : carried,
-      total: FUSE_COUNT,
-      bearing,
-      distance,
-      ready: open || (onExit && carried > 0),
-    };
+    let view: ObjectiveView;
+    if (last) {
+      const open = this.portals.portal?.isOpen ?? false;
+      view = {
+        title: open ? `THE DOOR IS OPEN${key}`
+          : onExit ? (carried > 0 ? `GET TO THE DOOR${key}` : `THE DOOR IS DEAD${key}`)
+            : `FIND THE FUSES${key}`,
+        // once they're in the door they stay spent, not lost
+        done: open ? this.escapeFuses : carried,
+        total: FUSE_COUNT,
+        bearing,
+        distance,
+        ready: open || (onExit && carried > 0),
+      };
+    } else {
+      view = { ...this.floorObjective(), bearing, distance };
+      view.title += key;
+    }
     this.hud.setObjective(view);
+  }
+
+  /** What this floor wants, in five words, with pips for how far along you are. */
+  private floorObjective(): ObjectiveView {
+    const d = this.descent;
+    const base = { bearing: null, distance: null } as const;
+    switch (descentKind(this.depth)) {
+      case 'softwall':
+        return {
+          ...base,
+          title: d.open ? 'IT LET YOU THROUGH' : 'SOMEWHERE THE WALL IS SOFT',
+          done: d.open ? 1 : 0, total: 1, ready: d.open,
+        };
+      case 'shutter':
+        return {
+          ...base,
+          title: d.open ? 'DOWN THE SERVICE RAMP' : 'MAKE FOUR CARS SCREAM AT ONCE',
+          done: d.open ? ALARMS_NEEDED : this.liveAlarms(),
+          total: ALARMS_NEEDED,
+          ready: d.open,
+        };
+      case 'drain':
+        return {
+          ...base,
+          title: d.open ? 'THE DEEP END WANTS YOU'
+            : d.progress >= 1 ? 'IT IS FILLING — GET TO THE DEEP END'
+              : 'FIND THE MAIN VALVE',
+          done: (d.progress >= 1 ? 1 : 0) + (d.open ? 1 : 0),
+          total: 2,
+          ready: d.open,
+        };
+      case 'hatch':
+        return {
+          ...base,
+          title: d.open ? 'THE HATCH IS OPEN' : 'A HATCH, AND A WHEEL THAT WILL NOT TURN',
+          done: d.open ? 1 : 0, total: 1, ready: d.open,
+        };
+      case 'door':
+        return {
+          ...base,
+          title: d.open ? 'THE STAIRS GO DOWN'
+            : d.codeKnown ? `THE DOOR TAKES ${descentLayout(this.seed, this.depth).code}`
+              : 'FOUR DIGITS, WRITTEN DOWN SOMEWHERE',
+          done: (d.codeKnown ? 1 : 0) + (d.open ? 1 : 0),
+          total: 2,
+          ready: d.open,
+        };
+      default:
+        return { ...base, title: 'DOWN', done: 0, total: 1, ready: false };
+    }
   }
 
   private openPortal(fuses: number): void {
@@ -923,8 +1403,39 @@ export class Game {
     this.audio.playSfx('click', 0.4);
   }
 
+  /**
+   * Dev-only keys, compiled out of a production build with the rest of
+   * `DEV_HACKS`. Nothing here is part of the game:
+   *
+   *   PageDown / PageUp   one floor down / up, skipping the descent puzzle
+   *   Backslash           jump to this floor's way down
+   *   Shift+Backslash     jump to the thing that unlocks it, if it has one
+   *
+   * The number keys are left alone on purpose — they belong to the
+   * quick-select bar, and Ctrl+number belongs to the browser's tab strip.
+   */
+  private updateDevHacks(): void {
+    let target = -1;
+    if (this.input.pressed('PageDown')) target = this.depth + 1;
+    if (this.input.pressed('PageUp')) target = this.depth - 1;
+    if (target >= 0 && target <= LAST_DEPTH && target !== this.depth) {
+      this.teleportToDepth(target);
+      this.flashMessage(`DEV — ${defForDepth(target).name}`);
+      return;
+    }
+    if (this.input.pressed('Backslash')) {
+      const toSub = this.input.down('ShiftLeft') || this.input.down('ShiftRight');
+      const ok = toSub ? this.teleportToSub() : this.teleportToDescent();
+      this.flashMessage(ok
+        ? `DEV — ${toSub ? 'THE UNLOCK' : 'THE WAY DOWN'}`
+        : 'DEV — NOTHING TO JUMP TO');
+    }
+  }
+
   /** Dev/test helper: jump to the exit portal, optionally with fuses in hand. */
   teleportToExit(withFuses = FUSE_COUNT): boolean {
+    // the portal only exists on the last floor, so go there first
+    if (this.depth !== LAST_DEPTH) this.teleportToDepth(LAST_DEPTH);
     const e = objectiveLayout(this.seed).exit;
     const x = e.cx * CHUNK + CHUNK / 2;
     const z = e.cz * CHUNK + CHUNK / 2;
@@ -943,6 +1454,7 @@ export class Game {
 
   /** Dev/test helper: jump to one of the three fuse rooms. */
   teleportToFuse(index = 0): boolean {
+    if (this.depth !== LAST_DEPTH) this.teleportToDepth(LAST_DEPTH);
     const f = objectiveLayout(this.seed).fuses[index];
     if (!f) return false;
     const x = f.cx * CHUNK + CHUNK / 2;
@@ -959,28 +1471,46 @@ export class Game {
     return true;
   }
 
-  /** Dev/test helper: jump to the nearest chunk of a given biome. */
-  teleportToBiome(id: BiomeId): boolean {
-    const pcx = Math.floor(this.player.position.x / CHUNK);
-    const pcz = Math.floor(this.player.position.z / CHUNK);
-    for (let r = 1; r < 80; r++) {
-      for (let dz = -r; dz <= r; dz++) {
-        for (let dx = -r; dx <= r; dx++) {
-          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
-          const cx = pcx + dx;
-          const cz = pcz + dz;
-          if (biomeForChunk(this.world.seed, cx, cz) !== id) continue;
-          const x = cx * CHUNK + CHUNK / 2;
-          const z = cz * CHUNK + CHUNK / 2;
-          this.world.preload(x, z);
-          const spot = this.world.findSpawnSpot(x, z, 0, 12, Math.random);
-          this.player.position.set(spot?.x ?? x, (spot?.y ?? 0) + 0.05, spot?.z ?? z);
-          this.player.pitch = 0;
-          return true;
-        }
-      }
-    }
-    return false;
+  /** Dev/test helper: drop straight onto a floor, skipping the ones above it. */
+  teleportToDepth(depth: number): boolean {
+    if (depth < 0 || depth > LAST_DEPTH || this.state !== 'playing') return false;
+    this.enterLevel(depth);
+    this.fade = 0;
+    this.fadeDir = 0;
+    this.hud.setFade(0);
+    return true;
+  }
+
+  /** Dev/test helper: jump to whatever this floor's way down happens to be. */
+  teleportToDescent(): boolean {
+    if (this.depth >= LAST_DEPTH) return false;
+    const e = descentLayout(this.seed, this.depth).exit;
+    this.world.preload(e.cx * CHUNK + CHUNK / 2, e.cz * CHUNK + CHUNK / 2);
+    const prop = this.descentMgr.prop;
+    if (!prop) return false;
+    const t = prop.target;
+    this.player.position.set(t.x, Math.max(t.y, 0.05), t.z + 2.4);
+    this.player.pitch = -0.2;
+    this.player.yaw = Math.PI;
+    return true;
+  }
+
+  /** Dev/test helper: jump to the unlock this floor needs, if it has one. */
+  teleportToSub(): boolean {
+    const s = descentLayout(this.seed, this.depth).sub;
+    if (!s) return false;
+    this.world.preload(s.cx * CHUNK + CHUNK / 2, s.cz * CHUNK + CHUNK / 2);
+    const sub = this.descentMgr.sub;
+    if (!sub) return false;
+    this.player.position.set(sub.position.x + 1.6, 0.05, sub.position.z);
+    this.player.yaw = Math.PI / 2;
+    this.player.pitch = 0;
+    return true;
+  }
+
+  /** Dev/test helper: which floor is under our feet, by name. */
+  currentDepth(): { depth: number; name: string } {
+    return { depth: this.depth, name: defForDepth(this.depth).name };
   }
 
   private nearestVending(maxDist: number): { id: string } | null {

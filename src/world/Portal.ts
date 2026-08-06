@@ -143,6 +143,8 @@ export class Portal {
   }
 
   dispose(): void {
+    this.mesh.removeFromParent();
+    this.light.removeFromParent();
     this.mesh.geometry.dispose();
     this.mat.dispose();
   }
@@ -176,6 +178,13 @@ export class PortalManager {
   setOpen(): void {
     this.alreadyOpen = true;
     this.portal?.open();
+  }
+
+  /** Leaving the floor the door is on — there is no door on the others. */
+  reset(): void {
+    this.portal?.dispose();
+    this.portal = null;
+    this.alreadyOpen = false;
   }
 
   update(time: number, dt: number): void {

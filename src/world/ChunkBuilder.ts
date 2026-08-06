@@ -3,10 +3,12 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CELL, CELLS, CHUNK, WALL_THICKNESS } from '../core/constants';
-import { getGraffitiMaterials, getWorldMaterials } from '../rendering/Textures';
+import {
+  getGraffitiMaterials, getWorldMaterials, ROT_WALL_COLS, ROT_WALL_ROWS, ROT_WALL_SHEETS,
+} from '../rendering/Textures';
 import { getWaterMaterial } from '../rendering/Water';
-import { BiomeId, BIOMES, biomeForChunk } from './Biomes';
-import { ChunkData } from './Chunk';
+import { BiomeId } from './Biomes';
+import { CarSpot, ChunkData } from './Chunk';
 
 const N = CELLS;
 
@@ -29,6 +31,22 @@ function vendGlass(): THREE.MeshStandardMaterial {
     roughness: 0.35,
   });
   return vendGlassMat;
+}
+
+/** Bay markings, tyres and the glass nobody has cleaned in a long time. */
+const propMats: Record<string, THREE.MeshStandardMaterial> = {};
+function propMat(key: string, make: () => THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
+  return propMats[key] ??= make();
+}
+
+/**
+ * One material per paint colour, shared across every chunk — a car park is
+ * hundreds of cars and nine colours.
+ */
+function carPaint(hex: number): THREE.MeshStandardMaterial {
+  return propMat(`paint${hex}`, () => new THREE.MeshStandardMaterial({
+    color: hex, roughness: 0.55, metalness: 0.35,
+  }));
 }
 
 /**
@@ -54,6 +72,31 @@ function worldUvs(g: THREE.BufferGeometry, w: number, h: number, d: number, metr
   uv.needsUpdate = true;
 }
 
+/** One sheet of an atlased texture, optionally hung the other way round. */
+interface Sheet { cell: number; mirror: boolean; }
+
+/**
+ * Squeeze per-face 0..1 UVs into one cell of a texture atlas. The inset keeps
+ * the filter from reaching into the neighbouring sheet at grazing angles, which
+ * would show up as somebody else's tear bleeding round a corner.
+ */
+function atlasUvs(g: THREE.BufferGeometry, sheet: Sheet, cols: number, rows: number): void {
+  const uv = g.getAttribute('uv') as THREE.BufferAttribute;
+  const col = sheet.cell % cols;
+  const row = Math.floor(sheet.cell / cols);
+  const inset = 0.004;
+  for (let i = 0; i < uv.count; i++) {
+    const u = sheet.mirror ? 1 - uv.getX(i) : uv.getX(i);
+    const v = uv.getY(i);
+    uv.setXY(
+      i,
+      (col + inset + u * (1 - inset * 2)) / cols,
+      (row + inset + v * (1 - inset * 2)) / rows,
+    );
+  }
+  uv.needsUpdate = true;
+}
+
 function pushBox(
   buckets: GeoBuckets, key: string,
   w: number, h: number, d: number,
@@ -61,9 +104,12 @@ function pushBox(
   rotY = 0,
   /** metres covered by one texture repeat; omit to stretch the map per face */
   uvMetres = 0,
+  /** which sheet of the material's atlas this box reads from, if it has one */
+  sheet?: Sheet,
 ) {
   const g = new THREE.BoxGeometry(w, h, d);
   if (uvMetres) worldUvs(g, w, h, d, uvMetres);
+  if (sheet) atlasUvs(g, sheet, ROT_WALL_COLS, ROT_WALL_ROWS);
   if (rotY) g.rotateY(rotY);
   g.translate(x, y, z);
   (buckets[key] ??= []).push(g);
@@ -127,21 +173,109 @@ interface BiomeMats { wall: string; floor: string; ceil: string; }
 function biomeMats(b: BiomeId): BiomeMats {
   switch (b) {
     case BiomeId.Level0: return { wall: 'wall', floor: 'carpet', ceil: 'ceiling' };
+    case BiomeId.Level1: return { wall: 'painted', floor: 'asphalt', ceil: 'concrete' };
     case BiomeId.Level2: return { wall: 'concrete', floor: 'concrete', ceil: 'concrete' };
     case BiomeId.Level37: return { wall: 'tileWall', floor: 'tileFloor', ceil: 'tileWall' };
     case BiomeId.Level7: return { wall: 'concrete', floor: 'deepTile', ceil: 'concrete' };
+    case BiomeId.LevelRun: return { wall: 'rotWall', floor: 'rotCarpet', ceil: 'ceiling' };
   }
 }
 
-export function buildChunk(seed: number, c: ChunkData): THREE.Group {
+/**
+ * Which material a wall segment ends up in. The last floor got the lobby's
+ * materials from memory and keeps losing its place: every so often a segment
+ * comes out as concrete or bathroom tile instead of wallpaper, and nobody ever
+ * fixed it. The rest draw one of the rotten wallpaper sheets — the texture is
+ * stretched per face, so a single sheet would stamp the same tears onto every
+ * panel in the corridor.
+ */
+function wallLook(c: ChunkData, lineKey: number, base: string): { key: string; sheet?: Sheet } {
+  if (c.biome !== BiomeId.LevelRun) return { key: base };
+  // deterministic per wall segment, so it doesn't shimmer between rebuilds
+  const hash = (a: number, b: number, cc: number, d: number) => {
+    const h = Math.sin(lineKey * a + c.cx * b + c.cz * cc) * d;
+    return h - Math.floor(h);
+  };
+  const r = hash(12.9898, 7.13, 3.71, 43758.5453);
+  if (r > 0.94) return { key: 'concrete' };
+  if (r > 0.9) return { key: 'tileWall' };
+  if (r > 0.87) return { key: 'wall' };   // a patch of the real thing, which is worse
+  // a second, independent draw for which sheet of paper went up here and which
+  // way round — one hash would tie the two together into a visible rhythm
+  const s = hash(78.233, 3.17, 9.41, 24634.6345);
+  const n = ROT_WALL_SHEETS;
+  return { key: base, sheet: { cell: Math.floor(s * n) % n, mirror: (Math.floor(s * n * 2) & 1) === 1 } };
+}
+
+/**
+ * One abandoned car, out of boxes and four cylinders. Nothing here is a model
+ * file: the whole game is generated at runtime, and a downloaded hatchback with
+ * real topology would be the only object in the world with any, which reads
+ * worse than a shape that agrees with everything around it. Colour is the only
+ * thing that varies, and that's enough — a hundred identical silhouettes in
+ * nine paints is exactly what a car park looks like.
+ */
+function buildCar(buckets: GeoBuckets, matByKey: Record<string, THREE.Material>, car: CarSpot): void {
+  const paintKey = `paint${car.paint}`;
+  matByKey[paintKey] ??= carPaint(car.paint);
+  const sin = Math.sin(car.angle);
+  const cos = Math.cos(car.angle);
+  const flip = car.inverted ? -1 : 1;
+  const at = (lx: number, ly: number, lz: number): [number, number, number] => [
+    car.x + lx * cos + lz * sin,
+    car.y + ly * flip,
+    car.z - lx * sin + lz * cos,
+  ];
+  const part = (key: string, w: number, h: number, d: number, lx: number, ly: number, lz: number) => {
+    const [x, y, z] = at(lx, ly, lz);
+    pushBox(buckets, key, w, h, d, x, y, z, car.angle);
+  };
+
+  part(paintKey, 1.78, 0.62, 4.3, 0, 0.74, 0);        // body
+  part(paintKey, 1.66, 0.3, 3.9, 0, 0.42, 0);          // sills
+  part(paintKey, 1.52, 0.14, 2.0, 0, 1.63, -0.05);     // roof
+  part('glass', 1.64, 0.52, 2.24, 0, 1.32, -0.05);     // greenhouse
+  part('tyre', 1.72, 0.14, 0.34, 0, 0.62, 2.16);       // bumpers
+  part('tyre', 1.72, 0.14, 0.34, 0, 0.62, -2.16);
+  part('lamp', 0.42, 0.16, 0.1, 0.6, 0.95, 2.18);      // headlamps
+  part('lamp', 0.42, 0.16, 0.1, -0.6, 0.95, 2.18);
+  part('lamp', 0.38, 0.14, 0.1, 0.62, 0.95, -2.18);    // tail lamps
+  part('lamp', 0.38, 0.14, 0.1, -0.62, 0.95, -2.18);
+
+  for (const lz of [1.42, -1.42]) {
+    for (const lx of [0.86, -0.86]) {
+      const g = new THREE.CylinderGeometry(0.34, 0.34, 0.24, 12);
+      g.rotateZ(-Math.PI / 2);
+      g.rotateY(car.angle);
+      const [x, y, z] = at(lx, 0.34, lz);
+      g.translate(x, y, z);
+      (buckets.tyre ??= []).push(g);
+    }
+  }
+}
+
+export function buildChunk(c: ChunkData): THREE.Group {
   const mats = getWorldMaterials();
   const matByKey: Record<string, THREE.Material> = {
     wall: mats.wall, carpet: mats.carpet, ceiling: mats.ceiling,
     concrete: mats.concrete, tileWall: mats.tileWall, tileFloor: mats.tileFloor,
-    deepTile: mats.deepTile,
+    deepTile: mats.deepTile, asphalt: mats.asphalt, painted: mats.painted,
+    rotWall: mats.rotWall, rotCarpet: mats.rotCarpet,
     metal: mats.metal, frame: mats.fixtureFrame,
     panelOn: mats.fixtureOn, panelOff: mats.fixtureOff,
     vendGlass: vendGlass(),
+    paint: propMat('linePaint', () => new THREE.MeshStandardMaterial({
+      color: 0xd8d4c0, roughness: 0.9, metalness: 0,
+    })),
+    tyre: propMat('tyre', () => new THREE.MeshStandardMaterial({
+      color: 0x14151a, roughness: 0.95, metalness: 0,
+    })),
+    glass: propMat('glass', () => new THREE.MeshStandardMaterial({
+      color: 0x1b2226, roughness: 0.18, metalness: 0.6,
+    })),
+    lamp: propMat('lamp', () => new THREE.MeshStandardMaterial({
+      color: 0x40200e, roughness: 0.4, metalness: 0.2,
+    })),
   };
   getGraffitiMaterials().forEach((m, i) => { matByKey[`graffiti${i}`] = m; });
   const bm = biomeMats(c.biome);
@@ -161,8 +295,7 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
     for (let i = 0; i < N; i++) {
       const k = idx(i, j);
       if (c.solid[k]) continue;
-      const floorKey = c.water[k] && c.biome === BiomeId.Level37 ? 'tileFloor' : bm.floor;
-      pushFloorCell(floorBatches, floorKey, i, j, wx0, wz0, c.floor[k], true);
+      pushFloorCell(floorBatches, bm.floor, i, j, wx0, wz0, c.floor[k], true);
       pushFloorCell(floorBatches, bm.ceil, i, j, wx0, wz0, c.ceil, false);
     }
   }
@@ -183,10 +316,11 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
         if (nf <= f + 0.01) continue;
         const h = nf - f;
         const cy = f + h / 2;
-        if (dir === 0) pushBox(buckets, 'tileWall', 0.06, h, CELL, wx0 + i * CELL + 0.03, cy, wz0 + (j + 0.5) * CELL, 0, CELL);
-        if (dir === 1) pushBox(buckets, 'tileWall', 0.06, h, CELL, wx0 + (i + 1) * CELL - 0.03, cy, wz0 + (j + 0.5) * CELL, 0, CELL);
-        if (dir === 2) pushBox(buckets, 'tileWall', CELL, h, 0.06, wx0 + (i + 0.5) * CELL, cy, wz0 + j * CELL + 0.03, 0, CELL);
-        if (dir === 3) pushBox(buckets, 'tileWall', CELL, h, 0.06, wx0 + (i + 0.5) * CELL, cy, wz0 + (j + 1) * CELL - 0.03, 0, CELL);
+        const sideKey = bm.wall;
+        if (dir === 0) pushBox(buckets, sideKey, 0.06, h, CELL, wx0 + i * CELL + 0.03, cy, wz0 + (j + 0.5) * CELL, 0, CELL);
+        if (dir === 1) pushBox(buckets, sideKey, 0.06, h, CELL, wx0 + (i + 1) * CELL - 0.03, cy, wz0 + (j + 0.5) * CELL, 0, CELL);
+        if (dir === 2) pushBox(buckets, sideKey, CELL, h, 0.06, wx0 + (i + 0.5) * CELL, cy, wz0 + j * CELL + 0.03, 0, CELL);
+        if (dir === 3) pushBox(buckets, sideKey, CELL, h, 0.06, wx0 + (i + 0.5) * CELL, cy, wz0 + (j + 1) * CELL - 0.03, 0, CELL);
       }
     }
   }
@@ -194,67 +328,77 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
   // ---- walls ----
   // This chunk renders its W/N border lines (0) and interior lines 1..15;
   // line 16 belongs to the +x/+z neighbour (identical data via edge contract).
-  const ceilW = BIOMES[biomeForChunk(seed, c.cx - 1, c.cz)].ceiling;
-  const ceilN = BIOMES[biomeForChunk(seed, c.cx, c.cz - 1)].ceiling;
-
-  for (let lineX = 0; lineX < N + 1; lineX++) {
-    if (lineX === N) continue;
+  // Every chunk on a floor shares one ceiling height, so borders never need a
+  // lintel to cover a step in the roof any more.
+  for (let lineX = 0; lineX < N; lineX++) {
     for (let j = 0; j < N; j++) {
+      if (!c.wallsV[lineX * N + j]) continue;
       const isBorder = lineX === 0;
-      const top = isBorder ? Math.max(c.ceil, ceilW) : c.ceil;
       const x = wx0 + lineX * CELL;
       const z = wz0 + (j + 0.5) * CELL;
-      if (c.wallsV[lineX * N + j]) {
-        const fl = isBorder ? 0 : Math.min(
-          c.solid[idx(lineX - 1, j)] ? 0 : c.floor[idx(lineX - 1, j)],
-          c.solid[idx(lineX, j)] ? 0 : c.floor[idx(lineX, j)],
-        );
-        pushBox(buckets, bm.wall, WALL_THICKNESS, top - fl, CELL + WALL_THICKNESS, x, fl + (top - fl) / 2, z, 0, wallUv);
-      } else if (isBorder && Math.abs(c.ceil - ceilW) > 0.01) {
-        // lintel sealing the gap between mismatched ceilings above a doorway
-        const lo = Math.min(c.ceil, ceilW) - 0.45;
-        pushBox(buckets, bm.wall, WALL_THICKNESS, top - lo, CELL + WALL_THICKNESS, x, lo + (top - lo) / 2, z, 0, wallUv);
-      }
+      const fl = isBorder ? 0 : Math.min(
+        c.solid[idx(lineX - 1, j)] ? 0 : c.floor[idx(lineX - 1, j)],
+        c.solid[idx(lineX, j)] ? 0 : c.floor[idx(lineX, j)],
+      );
+      const look = wallLook(c, lineX * 37 + j, bm.wall);
+      pushBox(buckets, look.key, WALL_THICKNESS, c.ceil - fl, CELL + WALL_THICKNESS, x, fl + (c.ceil - fl) / 2, z, 0, wallUv, look.sheet);
     }
   }
-  for (let lineZ = 0; lineZ < N + 1; lineZ++) {
-    if (lineZ === N) continue;
+  for (let lineZ = 0; lineZ < N; lineZ++) {
     for (let i = 0; i < N; i++) {
+      if (!c.wallsH[lineZ * N + i]) continue;
       const isBorder = lineZ === 0;
-      const top = isBorder ? Math.max(c.ceil, ceilN) : c.ceil;
       const x = wx0 + (i + 0.5) * CELL;
       const z = wz0 + lineZ * CELL;
-      if (c.wallsH[lineZ * N + i]) {
-        const fl = isBorder ? 0 : Math.min(
-          c.solid[idx(i, lineZ - 1)] ? 0 : c.floor[idx(i, lineZ - 1)],
-          c.solid[idx(i, lineZ)] ? 0 : c.floor[idx(i, lineZ)],
-        );
-        pushBox(buckets, bm.wall, CELL + WALL_THICKNESS, top - fl, WALL_THICKNESS, x, fl + (top - fl) / 2, z, 0, wallUv);
-      } else if (isBorder && Math.abs(c.ceil - ceilN) > 0.01) {
-        const lo = Math.min(c.ceil, ceilN) - 0.45;
-        pushBox(buckets, bm.wall, CELL + WALL_THICKNESS, top - lo, WALL_THICKNESS, x, lo + (top - lo) / 2, z, 0, wallUv);
-      }
+      const fl = isBorder ? 0 : Math.min(
+        c.solid[idx(i, lineZ - 1)] ? 0 : c.floor[idx(i, lineZ - 1)],
+        c.solid[idx(i, lineZ)] ? 0 : c.floor[idx(i, lineZ)],
+      );
+      const look = wallLook(c, 991 + lineZ * 37 + i, bm.wall);
+      pushBox(buckets, look.key, CELL + WALL_THICKNESS, c.ceil - fl, WALL_THICKNESS, x, fl + (c.ceil - fl) / 2, z, 0, wallUv, look.sheet);
     }
   }
 
   // ---- solid pillar cells ----
+  // SOLID_PROP cells are blocked because something is parked on them; the prop
+  // is the geometry, so don't stack a column of wallpaper on top of it.
   for (let j = 0; j < N; j++) {
     for (let i = 0; i < N; i++) {
-      if (!c.solid[idx(i, j)]) continue;
-      pushBox(buckets, bm.wall, CELL, c.ceil, CELL, wx0 + (i + 0.5) * CELL, c.ceil / 2, wz0 + (j + 0.5) * CELL, 0, wallUv);
+      if (c.solid[idx(i, j)] !== 1) continue;
+      const look = c.biome === BiomeId.Level1
+        ? { key: 'concrete', sheet: undefined }
+        : wallLook(c, 2731 + i * 37 + j, bm.wall);
+      pushBox(buckets, look.key, CELL, c.ceil, CELL, wx0 + (i + 0.5) * CELL, c.ceil / 2, wz0 + (j + 0.5) * CELL, 0, wallUv, look.sheet);
     }
   }
 
   // ---- light fixtures ----
+  // Ceiling panels everywhere except the slab, which is lit by bare tubes in
+  // wire cages hung off the soffit — longer, meaner, and further apart.
   for (const L of c.lights) {
-    pushBox(buckets, 'frame', 1.0, 0.07, 0.6, L.x, L.y + 0.02, L.z);
+    const w = L.strip ? 2.4 : 1.0;
+    const d = L.strip ? 0.24 : 0.6;
+    pushBox(buckets, 'frame', w, 0.07, d, L.x, L.y + 0.02, L.z);
     if (!L.flicker || L.broken) {
-      const g = new THREE.PlaneGeometry(0.88, 0.48);
+      const g = new THREE.PlaneGeometry(w * 0.88, d * 0.8);
       g.rotateX(Math.PI / 2);
       g.translate(L.x, L.y - 0.025, L.z);
       (buckets[L.broken ? 'panelOff' : 'panelOn'] ??= []).push(g);
     }
   }
+
+  // ---- bay markings ----
+  // Painted before the building above them was cancelled: two lines down the
+  // sides and a stub across the head, whether or not anything is parked there.
+  for (const b of c.bays) {
+    for (const s of [-1, 1]) {
+      pushBox(buckets, 'paint', 0.1, 0.012, 3.9, b.x + s * (CELL / 2), 0.008, b.z);
+    }
+    pushBox(buckets, 'paint', CELL - 0.2, 0.012, 0.1, b.x, 0.008, b.z - 1.95);
+  }
+
+  // ---- cars ----
+  for (const car of c.cars) buildCar(buckets, matByKey, car);
 
   // ---- taps ----
   for (const t of c.taps) {
@@ -273,7 +417,7 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
   // Pipes follow the tunnels instead of a random lane: a corridor is a row or
   // column that runs clear through the chunk, so the run never buries itself
   // in concrete and always arrives at the neighbouring chunk's corridor.
-  if (c.biome === BiomeId.Level2) {
+  if (c.biome === BiomeId.Level2 || c.biome === BiomeId.Level1) {
     const rowClear = (j: number) => {
       for (let i = 0; i < N; i++) if (c.solid[idx(i, j)]) return false;
       return true;
@@ -389,25 +533,28 @@ export function buildChunk(seed: number, c: ChunkData): THREE.Group {
   }
 
   // ---- water surface ----
+  // One quad per wet cell rather than one over the bounding box: a level with
+  // scattered puddles would otherwise get a single sheet of water stretched
+  // between them, across dry carpet. The surface is a flat plane, so all the
+  // quads are built at y = 0 and the mesh is placed at the level's water line —
+  // which is how the whole floor can flood by moving one object.
   if (c.waterY !== null) {
-    let minI = N, maxI = -1, minJ = N, maxJ = -1;
+    const surface: Record<string, QuadBatch> = {};
     for (let j = 0; j < N; j++) {
       for (let i = 0; i < N; i++) {
-        if (c.water[idx(i, j)]) {
-          minI = Math.min(minI, i); maxI = Math.max(maxI, i);
-          minJ = Math.min(minJ, j); maxJ = Math.max(maxJ, j);
-        }
+        const k = idx(i, j);
+        if (!c.water[k] || c.solid[k]) continue;
+        pushFloorCell(surface, 'w', i, j, wx0, wz0, 0, true);
       }
     }
-    if (maxI >= 0) {
-      const w = (maxI - minI + 1) * CELL;
-      const d = (maxJ - minJ + 1) * CELL;
-      const g = new THREE.PlaneGeometry(w, d, 12, 12);
-      g.rotateX(-Math.PI / 2);
-      const mesh = new THREE.Mesh(g, getWaterMaterial(c.biome === BiomeId.Level37 ? 'pool' : 'deep'));
-      mesh.position.set(wx0 + minI * CELL + w / 2, c.waterY, wz0 + minJ * CELL + d / 2);
+    if (surface.w) {
+      const kind = c.biome === BiomeId.Level37 ? 'pool'
+        : c.biome === BiomeId.Level7 ? 'deep' : 'film';
+      const mesh = new THREE.Mesh(makeQuadGeometry(surface.w), getWaterMaterial(kind));
+      mesh.position.y = c.waterY;
       mesh.renderOrder = 2;
       group.add(mesh);
+      c.waterMesh = mesh;
     }
   }
 
@@ -423,4 +570,5 @@ export function disposeChunk(c: ChunkData): void {
     (fp.mesh.material as THREE.Material).dispose();
   }
   c.flickerPanels.length = 0;
+  c.waterMesh = null;
 }

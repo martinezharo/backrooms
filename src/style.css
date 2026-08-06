@@ -778,3 +778,86 @@ body.touch #inspect-label {
 /* the white of the impact bleeds into the title card */
 #escape-screen:not(.hidden) { animation: escapeFade 1.7s ease-out; }
 @keyframes escapeFade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------- Breath ---------- */
+/* Only ever on screen while your head is under, so it earns the attention. */
+.bar-icon.oxygen { color: #6fc8d8; }
+.bar-fill.oxygen { background: linear-gradient(90deg, #16576b, #55c6dc); box-shadow: 0 0 10px rgba(85, 198, 220, 0.55); }
+.bar-fill.oxygen.critical { animation: barPulse 0.5s infinite; }
+
+/* ---------- Level card ---------- */
+/* The only thing on screen that says which floor you are on, and it says it
+   once, on the way in, and then leaves. */
+#level-card {
+  position: absolute;
+  left: 50%; top: 34%;
+  transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.4s ease;
+  text-align: center;
+}
+#level-card.visible { opacity: 1; }
+#level-card-name {
+  font-size: clamp(30px, 7vw, 62px);
+  letter-spacing: 0.34em;
+  color: #e8d989;
+  text-shadow: 0 0 26px rgba(232, 217, 137, 0.5), 0 0 4px rgba(0,0,0,1);
+}
+#level-card-tag {
+  font-size: 13px;
+  letter-spacing: 0.4em;
+  opacity: 0.6;
+  text-transform: lowercase;
+}
+
+/* ---------- Keypad ---------- */
+#keypad-screen { background: radial-gradient(ellipse at center, rgba(10,12,8,.72) 0%, rgba(2,3,1,.94) 80%); }
+#keypad-panel {
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  padding: 26px 30px 22px;
+  border: 1px solid rgba(232, 217, 137, 0.28);
+  background: rgba(14, 14, 9, 0.92);
+  box-shadow: 0 0 60px rgba(0,0,0,0.8);
+}
+#keypad-readout {
+  font-size: 34px;
+  letter-spacing: 0.5em;
+  padding-left: 0.5em; /* balance the trailing letter-spacing */
+  color: #ff6a4a;
+  text-shadow: 0 0 14px rgba(255, 90, 60, 0.6);
+  min-height: 42px;
+}
+#keypad-readout.ok { color: #6affa0; text-shadow: 0 0 16px rgba(90, 255, 150, 0.6); }
+#keypad-readout.bad { animation: keypadShake 0.34s; }
+@keyframes keypadShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-7px); }
+  75% { transform: translateX(7px); }
+}
+#keypad-keys { display: grid; grid-template-columns: repeat(3, 62px); gap: 8px; }
+.keypad-key {
+  font-family: inherit;
+  font-size: 21px;
+  padding: 14px 0;
+  background: rgba(232, 217, 137, 0.05);
+  border: 1px solid rgba(232, 217, 137, 0.3);
+  color: #e8d989;
+  cursor: pointer;
+}
+.keypad-key:active { background: rgba(232, 217, 137, 0.2); }
+.keypad-key.wide { grid-column: span 3; font-size: 14px; letter-spacing: 0.2em; }
+#keypad-hint { font-size: 11px; opacity: 0.45; letter-spacing: 0.16em; }
+
+/* ---------- Falling to the next floor ---------- */
+/* Sits over the HUD as well as the world: on the way down there is nothing to
+   read and nothing to press. */
+#fade-veil {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 15;
+}
