@@ -7,11 +7,14 @@ import { FriendState } from '../core/Save';
 import { BiomeId } from '../world/Biomes';
 import { World } from '../world/World';
 import { Enemy, EnemyContext } from './Enemy';
+import { Goblin } from './Goblin';
 import { Hound, Partygoer, SkinStealer, Smiler } from './types';
 
 const MAX_ENEMIES = 5;
 const SPAWN_MIN = 22;
 const SPAWN_MAX = 42;
+const GOBLIN_SPAWN_MIN = 10;
+const GOBLIN_SPAWN_MAX = 18;
 const DESPAWN = 70;
 /** seconds before anything is allowed near a fresh run */
 const FIRST_GRACE = 20;
@@ -22,21 +25,21 @@ const SPAWN_EVERY_RAND = 18;
 type EnemyCtor = new () => Enemy;
 
 const WEIGHTS: Record<BiomeId, [EnemyCtor, number][]> = {
-  [BiomeId.Level0]: [[Partygoer, 0.45], [Hound, 0.25], [SkinStealer, 0.2], [Smiler, 0.1]],
+  [BiomeId.Level0]: [[Goblin, 0.24], [Partygoer, 0.34], [Hound, 0.2], [SkinStealer, 0.15], [Smiler, 0.07]],
   // A slab you can see all the way across is hound country: they come at you
   // down an aisle from a very long way off, and there is nowhere to break line.
-  [BiomeId.Level1]: [[Hound, 0.5], [Smiler, 0.3], [SkinStealer, 0.2]],
-  [BiomeId.Level2]: [[Hound, 0.4], [Smiler, 0.35], [SkinStealer, 0.25]],
-  [BiomeId.Level37]: [[SkinStealer, 0.5], [Smiler, 0.3], [Hound, 0.2]],
+  [BiomeId.Level1]: [[Goblin, 0.2], [Hound, 0.4], [Smiler, 0.25], [SkinStealer, 0.15]],
+  [BiomeId.Level2]: [[Goblin, 0.18], [Hound, 0.34], [Smiler, 0.3], [SkinStealer, 0.18]],
+  [BiomeId.Level37]: [[Goblin, 0.12], [SkinStealer, 0.46], [Smiler, 0.27], [Hound, 0.15]],
   // Nothing walks on Level 7. The water is what is trying to kill you there,
   // and it does not need help.
   [BiomeId.Level7]: [],
-  [BiomeId.LevelRun]: [[Partygoer, 0.3], [Hound, 0.3], [SkinStealer, 0.2], [Smiler, 0.2]],
+  [BiomeId.LevelRun]: [[Goblin, 0.2], [Partygoer, 0.25], [Hound, 0.25], [SkinStealer, 0.15], [Smiler, 0.15]],
 };
 
 /** Only friends are ever restored, so the save keeps a name, not a class. */
 const BY_VOICE: Record<string, EnemyCtor> = {
-  smiler: Smiler, stealer: SkinStealer, hound: Hound, partygoer: Partygoer,
+  smiler: Smiler, stealer: SkinStealer, hound: Hound, partygoer: Partygoer, goblin: Goblin,
 };
 
 export class Spawner {
@@ -131,6 +134,22 @@ export class Spawner {
       r -= w;
       if (r <= 0) { Ctor = cls; break; }
     }
+
+    // Neutral goblins never walk toward the player, so seed them closer than a
+    // hunter. They still spawn behind geometry: the intended reveal is rounding
+    // a corner and catching a tiny idiot already waving at you.
+    if (Ctor === Goblin) {
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const s = this.world.findSpawnSpot(
+          playerPos.x, playerPos.z, GOBLIN_SPAWN_MIN, GOBLIN_SPAWN_MAX, Math.random,
+        );
+        if (s && this.world.lineBlocked(s.x, s.z, playerPos.x, playerPos.z)) {
+          spot = s;
+          break;
+        }
+      }
+    }
+
     const count = Ctor === Hound ? 2 + (Math.random() < 0.4 ? 1 : 0) : 1;
     for (let i = 0; i < count; i++) {
       if (this.hostileCount() >= this.maxEnemies) break;
@@ -151,6 +170,9 @@ export class Spawner {
     let danger = 0;
     for (const e of this.enemies) {
       if (!e.alive || e.befriended) continue;
+      // A goblin doing stand-up comedy across the hallway is not danger. The
+      // instant you hit him, however, he contributes like every other hunter.
+      if (e instanceof Goblin && !e.isAngry) continue;
       const d = e.position.distanceTo(playerPos);
       const proximity = Math.max(0, 1 - d / 30);
       const weight = e.state === 'chase' || e.state === 'attack' ? 1
@@ -167,7 +189,12 @@ export class Spawner {
   saveState(): FriendState[] {
     return this.enemies
       .filter((e) => e.befriended && e.alive)
-      .map((e) => ({ voiceId: e.voiceId, x: e.position.x, y: e.position.y, z: e.position.z }));
+      .map((e) => ({
+        voiceId: e instanceof Goblin ? 'goblin' : e.voiceId,
+        x: e.position.x,
+        y: e.position.y,
+        z: e.position.z,
+      }));
   }
 
   loadState(friends: FriendState[]): void {
