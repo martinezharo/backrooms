@@ -16,8 +16,7 @@ The systems that define a run are:
 
 - thirst, oxygen, health, torch charge, water, scavenged items, inventory, and
   melee/ranged combat;
-- stalking entities with distinct behaviours, including the option to befriend
-  one at close range;
+- stalking entities with distinct behaviours;
 - deterministic generation from `?seed=...`, with checkpoints and records in
   `localStorage`;
 - desktop mouse/keyboard controls and on-screen touch controls. Use
@@ -66,5 +65,5 @@ Other focused probes and tours are in [`scripts/`](scripts/).
 | `E` | Interact, pick up, or use the current objective |
 | `LMB` / `RMB` | Attack / block, aim, or drink depending on the item |
 | `Tab` / `I` | Inventory |
-| `F` / `R` / `G` / `H` | Torch / receiver / drop / hug |
+| `F` / `R` / `G` | Torch / receiver / drop |
 | `Esc` | Pause and save a checkpoint |
