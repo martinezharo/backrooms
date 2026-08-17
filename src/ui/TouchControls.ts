@@ -41,7 +41,7 @@ const TOOLS: Spec[] = [
   { id: 'torch', label: 'TORCH', hold: 'KeyF', cls: 'small' },
   { id: 'receiver', label: 'RCVR', hold: 'KeyR', cls: 'small' },
   { id: 'drop', label: 'DROP', hold: 'KeyG', cls: 'small' },
-  { id: 'hug', label: '🫂', hold: 'KeyH', cls: 'small' },
+  { id: 'hug', label: 'H', hold: 'KeyH', cls: 'small' },
 ];
 
 /** Coarse pointer with no hover = a finger. `?touch=1` / `?touch=0` overrides. */
