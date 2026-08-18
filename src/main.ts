@@ -39,7 +39,7 @@ if (canContinue) {
  * Keep the landing page tiny. Three.js and the game systems are only fetched
  * after the player has explicitly chosen to enter the maze.
  */
-async function bootGame(resume: boolean): Promise<void> {
+async function bootGame(resume: boolean, trustedStart: boolean): Promise<void> {
   if (loading || game) return;
   loading = true;
   startButton.disabled = true;
@@ -53,7 +53,7 @@ async function bootGame(resume: boolean): Promise<void> {
 
   try {
     const { Game: GameClass } = await import('./core/Game');
-    game = new GameClass(seed);
+    game = new GameClass(seed, trustedStart);
 
     // debug/testing hook (used by the headless smoke tests) — dev builds only
     if (DEV_HACKS) (window as unknown as { __game: Game }).__game = game;
@@ -67,5 +67,5 @@ async function bootGame(resume: boolean): Promise<void> {
   }
 }
 
-startButton.addEventListener('click', () => { void bootGame(false); });
-continueButton.addEventListener('click', () => { void bootGame(true); });
+startButton.addEventListener('click', (event) => { void bootGame(false, event.isTrusted); });
+continueButton.addEventListener('click', (event) => { void bootGame(true, event.isTrusted); });

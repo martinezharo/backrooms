@@ -6,9 +6,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "pnpm run check && vite build",
     "preview": "pnpm run build && wrangler dev",
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit",
     "deploy": "pnpm run build && wrangler deploy"
   },
   "packageManager": "pnpm@10.33.0",
@@ -17,6 +17,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.44.0",
+    "@cloudflare/workers-types": "5.20260818.1",
     "@types/three": "^0.184.1",
     "puppeteer": "^25.1.0",
     "typescript": "^6.0.3",

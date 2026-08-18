@@ -55,6 +55,13 @@ node scripts/save.mjs 'http://localhost:5199/?seed=1234'
 
 Other focused probes and tours are in [`scripts/`](scripts/).
 
+## Anonymous gameplay analytics
+
+The Worker counts probable engaged sessions (real start, 45 visible seconds,
+and 5 m of movement) and records the event and Cloudflare country, without IPs
+or identifiers. Use `?telemetry=off` to exclude your browser; `?telemetry=on`
+re-enables it.
+
 ## Controls
 
 | Input | Action |

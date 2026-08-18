@@ -35,6 +35,7 @@ import { DEV_HACKS } from './dev';
 import { Input } from './Input';
 import { loadRecords, noteDepth, noteEscape, noteLevel, noteRunStarted } from './Records';
 import { clearSave, DescentState, loadSave, SaveGame, writeSave } from './Save';
+import { Telemetry } from './Telemetry';
 import { getRenderQuality } from '../rendering/Quality';
 
 type GameState = 'menu' | 'playing' | 'paused' | 'dead' | 'escaping' | 'escaped';
@@ -145,8 +146,9 @@ export class Game {
   private noiseHeat = 0;
   private readonly viewDirection = new THREE.Vector3();
   private readonly enemyOffset = new THREE.Vector3();
+  private readonly telemetry: Telemetry;
 
-  constructor(seed: number) {
+  constructor(seed: number, trustedStart = false) {
     this.seed = seed;
     const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
     this.renderer = new THREE.WebGLRenderer({
@@ -167,6 +169,7 @@ export class Game {
 
     this.input = new Input(canvas);
     this.touch = new TouchControls(this.input);
+    this.telemetry = new Telemetry(trustedStart);
     this.player = new Player(window.innerWidth / window.innerHeight);
     this.player.camera.add(this.audio.listener);
 
@@ -243,6 +246,7 @@ export class Game {
     this.stats.onDeath = (cause) => {
       this.state = 'dead';
       clearSave(); // a checkpoint is for putting the game down, not for dying twice
+      this.telemetry.record('death', this.depth, this.survivalTime, this.inputMode());
 
       this.expectUnlock = true;
       this.input.exitPointerLock();
@@ -402,6 +406,7 @@ export class Game {
 
     this.hud.show(true);
     this.state = 'playing';
+    this.telemetry.record('game_started', this.depth, this.survivalTime, this.inputMode());
     this.audio.prepareWhenIdle();
     this.touch.goImmersive();
     this.touch.setBagOpen(false);
@@ -564,6 +569,15 @@ export class Game {
       p.update(dt, this.input, this.world);
       this.combat.update(dt, this.input, p, this.world, this.spawner.enemies);
     }
+    this.telemetry.update(
+      p.position.x,
+      p.position.z,
+      !uiOpen && !falling,
+      p.moving,
+      this.depth,
+      this.survivalTime,
+      this.inputMode(),
+    );
 
     // ---- interactions ----
     // The way down speaks first. Everything else in reach — a battery on the
@@ -1137,6 +1151,7 @@ export class Game {
     if (def.arrival === 'drop') this.audio.playSfx('splash', 0.5);
     this.hud.showLevelCard(def.name, def.tagline);
     noteLevel(depth);
+    this.telemetry.level(depth, this.survivalTime, this.inputMode());
     this.saveRun();
   }
 
@@ -1321,11 +1336,16 @@ export class Game {
     this.state = 'escaped';
     this.escape.stop();
     this.audio.stopWind();
+    this.telemetry.record('escape', this.depth, this.survivalTime, this.inputMode());
     this.menus.showEscape(
       this.escapeFuses,
       this.survivalTime,
       noteEscape(this.escapeFuses, this.survivalTime),
     );
+  }
+
+  private inputMode(): 'keyboard' | 'touch' {
+    return this.input.touchMode ? 'touch' : 'keyboard';
   }
 
   /** The bottle in your hand, if that's what you're holding. */
