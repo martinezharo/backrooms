@@ -402,6 +402,7 @@ export class Game {
     this.fadeDir = 0;
     this.pendingDepth = -1;
     this.hud.setFade(0);
+    this.hud.setTapeStatus(this.survivalTime, defForDepth(this.depth).name);
     this.hud.showLevelCard(defForDepth(this.depth).name, defForDepth(this.depth).tagline);
 
     this.hud.show(true);
@@ -746,6 +747,7 @@ export class Game {
     this.postfx.setVignette(biome.vignette);
     this.postfx.setWaterTint(biome.underwaterTint);
     this.hud.announceBiome(biome.name);
+    this.hud.setTapeStatus(this.survivalTime, biome.name);
     this.audio.setAmbience(biome.ambienceId);
 
     // wading follows how fast you are dragging yourself through the water, and

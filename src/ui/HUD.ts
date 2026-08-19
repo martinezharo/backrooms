@@ -42,6 +42,8 @@ export class HUD {
   private levelCard = document.getElementById('level-card')!;
   private levelCardName = document.getElementById('level-card-name')!;
   private levelCardTag = document.getElementById('level-card-tag')!;
+  private tapeTime = document.getElementById('tape-hud-time')!;
+  private tapeLevel = document.getElementById('tape-hud-level')!;
   private levelCardTimer: number | null = null;
   private lastOxygen = -Infinity;
   private friendSpeechTimer: number | null = null;
@@ -54,6 +56,8 @@ export class HUD {
   private lastEquipped = '';
   private lastDamage = -Infinity;
   private objectiveVisible = false;
+  private lastTapeSecond = -1;
+  private lastTapeLevel = '';
 
   private biomeShown = '';
   private biomeTimer: number | null = null;
@@ -62,6 +66,23 @@ export class HUD {
 
   show(visible: boolean): void {
     this.root.classList.toggle('hidden', !visible);
+  }
+
+  setTapeStatus(seconds: number, level: string): void {
+    const whole = Math.max(0, Math.floor(seconds));
+    if (whole !== this.lastTapeSecond) {
+      this.lastTapeSecond = whole;
+      const hours = Math.floor(whole / 3600);
+      const minutes = Math.floor((whole % 3600) / 60);
+      const secs = whole % 60;
+      this.tapeTime.textContent = [hours, minutes, secs]
+        .map((part) => String(part).padStart(2, '0'))
+        .join(':');
+    }
+    if (level !== this.lastTapeLevel) {
+      this.lastTapeLevel = level;
+      this.tapeLevel.textContent = level;
+    }
   }
 
   setBars(health: number, thirst: number): void {

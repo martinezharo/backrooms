@@ -46,6 +46,8 @@
 
   <!-- Favicon: the Smiler, inline SVG — no asset files -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230a0903'/%3E%3Ccircle cx='32' cy='30' r='27' fill='%23e8d989' opacity='0.07'/%3E%3Cellipse cx='22' cy='23' rx='8' ry='6.5' fill='%23ffffff' opacity='0.16'/%3E%3Cellipse cx='42' cy='23' rx='8' ry='6.5' fill='%23ffffff' opacity='0.16'/%3E%3Cellipse cx='22' cy='23' rx='5.2' ry='3.8' fill='%23ffffff'/%3E%3Cellipse cx='42' cy='23' rx='5.2' ry='3.8' fill='%23ffffff'/%3E%3Ccircle cx='23.5' cy='23.5' r='1.4' fill='%230a0903'/%3E%3Ccircle cx='43.5' cy='23.5' r='1.4' fill='%230a0903'/%3E%3Cpath d='M10 34 Q32 58 54 34 Q32 46 10 34 Z' fill='%23ffffff'/%3E%3Cg stroke='%230a0903' stroke-width='1.7'%3E%3Cpath d='M17 36v6M22 38v8M27 39v9M32 40v9M37 39v9M42 38v8M47 36v6'/%3E%3C/g%3E%3C/svg%3E" />
+  <link rel="preload" href="/tape/frames/lobby.webp" as="image" fetchpriority="high" />
+  <link rel="stylesheet" href="/tape/fonts/fonts.css" />
   <!-- Keep the first paint independent from the full game stylesheet. -->
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -76,6 +78,10 @@
 
     <!-- In-game HUD -->
     <div id="hud" class="hidden">
+      <div class="tape-hud-status" aria-hidden="true">
+        <div class="tape-hud-left"><span class="tape-recdot"></span><span>REC</span><span class="tape-hud-sp">SP</span></div>
+        <div class="tape-hud-right"><span id="tape-hud-time">00:00:00</span><span id="tape-hud-level">LEVEL 0</span></div>
+      </div>
       <div id="crosshair"></div>
       <div id="stats-bars">
         <div class="bar-row">
@@ -162,99 +168,225 @@
       <div id="inspect-label" class="hidden"></div>
     </div>
 
-    <!-- Landing page / start screen -->
-    <div id="start-screen" class="overlay menu-screen landing">
-      <header class="landing-hero">
-        <h1 class="game-title">THE BACKROOMS</h1>
-        <p class="tagline">you noclipped out of reality</p>
-        <div class="badges">
-          <span class="badge">100% free</span>
-          <span class="badge">no download</span>
-          <span class="badge">no sign-up</span>
-          <span class="badge">plays in your browser</span>
+    <!-- Landing page / start screen: TAPE 1 deck menu -->
+    <div id="start-screen" class="overlay menu-screen landing tape-landing">
+      <svg width="0" height="0" class="tape-svg-defs" aria-hidden="true"><defs>
+        <filter id="tape-chrom-r"><feColorMatrix type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" /></filter>
+        <filter id="tape-chrom-b"><feColorMatrix type="matrix" values="0 0 0 0 0  0 0.5 0 0 0  0 0 1 0 0  0 0 0 1 0" /></filter>
+      </defs></svg>
+
+      <div class="tube" aria-hidden="true">
+        <img class="tube-shot is-on" data-seg="0" src="/tape/frames/lobby.webp" alt="" fetchpriority="high" decoding="async" />
+        <img class="tube-shot" data-seg="1" src="/tape/frames/parking.webp" alt="" decoding="async" />
+        <img class="tube-shot" data-seg="2" src="/tape/frames/poolrooms.webp" alt="" decoding="async" />
+        <img class="tube-shot" data-seg="3" src="/tape/frames/poolrooms.webp" alt="" decoding="async" style="filter:hue-rotate(-16deg) brightness(.55) saturate(1.5)" />
+        <img class="tube-shot" data-seg="4" src="/tape/frames/pipes.webp" alt="" decoding="async" />
+        <img class="tube-shot" data-seg="5" src="/tape/frames/run.webp" alt="" decoding="async" />
+        <img class="tube-shot bleed-r is-on" src="/tape/frames/lobby.webp" alt="" decoding="async" />
+        <img class="tube-shot bleed-b is-on" src="/tape/frames/lobby.webp" alt="" decoding="async" />
+        <div class="tube-dark"></div>
+        <div class="tube-grain"></div>
+        <div class="tube-lines"></div>
+        <div class="tube-drop"></div>
+        <div class="tube-vig"></div>
+        <div class="tube-head"></div>
+      </div>
+
+      <div class="unit">
+        <header class="deck">
+          <div class="deck-tl"><span class="play-glyph">&#9654;</span><span>PLAY</span><span class="tc">SP</span><span class="recdot"></span></div>
+          <div class="deck-tr"><div class="tc" id="tape-clock">00:00:00:00</div><div class="sub">Tape <span id="tape-seed-label">—</span> of &infin;</div></div>
+        </header>
+
+        <main class="mainmenu">
+          <div class="mm-left">
+            <h1 class="mm-title">The<br />Backrooms</h1>
+            <p class="mm-strap">Free browser horror &middot; no download</p>
+
+            <div class="mm-list" role="tablist" aria-orientation="vertical" aria-label="Deck functions">
+              <button class="mmrow" role="tab" id="t-play" aria-controls="p-play" aria-selected="true" tabindex="0" data-seg="0">
+                <span class="cur" aria-hidden="true">&#9654;</span><span>Play</span><span class="val">New tape</span>
+              </button>
+              <button class="mmrow" role="tab" id="t-resume" aria-controls="p-resume" aria-selected="false" tabindex="-1" data-seg="1">
+                <span class="cur" aria-hidden="true">&#9654;</span><span>Resume</span><span class="val">Saved run</span>
+              </button>
+              <button class="mmrow" role="tab" id="t-index" aria-controls="p-index" aria-selected="false" tabindex="-1" data-seg="0">
+                <span class="cur" aria-hidden="true">&#9654;</span><span>Index</span><span class="val">6 levels</span>
+              </button>
+              <button class="mmrow" role="tab" id="t-subjects" aria-controls="p-subjects" aria-selected="false" tabindex="-1" data-seg="4">
+                <span class="cur" aria-hidden="true">&#9654;</span><span>Subjects</span><span class="val">5 identified</span>
+              </button>
+              <button class="mmrow" role="tab" id="t-functions" aria-controls="p-functions" aria-selected="false" tabindex="-1" data-seg="5">
+                <span class="cur" aria-hidden="true">&#9654;</span><span>Functions</span><span class="val">Controls</span>
+              </button>
+              <button class="mmrow" role="tab" id="t-tape" aria-controls="p-tape" aria-selected="false" tabindex="-1" data-seg="2">
+                <span class="cur" aria-hidden="true">&#9654;</span><span>Tape n&ordm;</span><span class="val">Seed</span>
+              </button>
+            </div>
+
+            <p class="mm-keys"><kbd>&uarr;</kbd><kbd>&darr;</kbd> move the cursor &middot; <kbd>Enter</kbd> select</p>
+          </div>
+
+          <div class="mm-right">
+            <section class="mm-panel" role="tabpanel" id="p-play" aria-labelledby="t-play" tabindex="0">
+              <div class="mm-head"><span>Function 01</span><span>Play</span><span class="r">Tape loaded</span></div>
+              <div class="mm-body">
+                <h2>A free horror game in your browser</h2>
+                <p>A full reel of recovered footage came back. The person holding the camera did not.
+                   Press play and you are the next one holding it: a first-person descent through six levels
+                   of a building with no outside, hunted the whole way down.</p>
+                <div class="mm-acts">
+                  <button id="btn-start" class="btn btn--key" type="button">&#9654; Play &mdash; new tape</button>
+                </div>
+                <p class="fine">Sound carries further than the picture &mdash; headphones recommended</p>
+                <p>It runs in the browser on WebGL. There is nothing to download, nothing to install and no
+                   account to make &mdash; the tape starts when you press play, on a computer or a phone.</p>
+                <div class="chips"><span>Free</span><span>No download</span><span>No sign-up</span><span>WebGL</span><span>Keyboard, mouse or touch</span></div>
+                <p id="landing-records" class="fine hidden" aria-live="polite"></p>
+              </div>
+            </section>
+
+            <section class="mm-panel" role="tabpanel" id="p-resume" aria-labelledby="t-resume" tabindex="0" hidden>
+              <div class="mm-head"><span>Function 02</span><span>Resume</span><span class="r">Local save only</span></div>
+              <div class="mm-body">
+                <h2>Your tape is still in the deck</h2>
+                <p id="tape-resume-copy">No tape is currently held in the deck. Start a descent and pause to leave one here.</p>
+                <div class="mm-acts"><button id="btn-continue" class="btn btn--key hidden" type="button">&#9654; Resume</button></div>
+                <p class="fine">The checkpoint stays on this device. Nothing is uploaded.</p>
+                <div class="readout">
+                  <div><span class="k">Position</span><span id="tape-resume-time" class="v cy">&mdash;</span></div>
+                  <div><span class="k">Segment</span><span id="tape-resume-level" class="v">&mdash;</span></div>
+                  <div><span class="k">Fuses</span><span id="tape-resume-fuses" class="v">&mdash;</span></div>
+                  <div><span class="k">Tape</span><span id="tape-resume-seed" class="v">&mdash;</span></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="mm-panel" role="tabpanel" id="p-index" aria-labelledby="t-index" tabindex="0" hidden>
+              <div class="mm-head"><span>Function 03</span><span>Index</span><span class="r">Six levels &middot; one direction</span></div>
+              <div class="mm-body">
+                <h2>Six levels, one direction</h2>
+                <p>The deck reads six clean segments. Each is a floor with its own light, its own way down
+                   and its own price for letting you pass.</p>
+                <p class="ixhelp">Pick a segment to put it on the tube</p>
+                <div class="ixlist">
+                  <button class="ix" data-seg="0" aria-pressed="true"><span class="t">00:00:00<small>Level 0</small></span><span class="n">The lobby<small>Yellow rooms</small></span><span class="d">Mono-yellow wallpaper, damp carpet and a light fitting every four metres.</span></button>
+                  <button class="ix" data-seg="1" aria-pressed="false"><span class="t">00:03:41<small>Level 1</small></span><span class="n">Front parking<small>Level &minus;1</small></span><span class="d">Concrete ceiling, long sight-lines and something at the end of one.</span></button>
+                  <button class="ix" data-seg="2" aria-pressed="false"><span class="t">00:07:02<small>Level 37</small></span><span class="n">The poolrooms<small>Warm water</small></span><span class="d">White tile, light through the water and no edge to the place.</span></button>
+                  <button class="ix" data-seg="3" aria-pressed="false"><span class="t">00:10:55<small>Level 7</small></span><span class="n">Thalassophobia<small>Deep water</small></span><span class="d">The ceiling is under the surface. Ration whatever breath you have.</span></button>
+                  <button class="ix" data-seg="4" aria-pressed="false"><span class="t">00:14:20<small>Level 2</small></span><span class="n">Pipe dreams<small>Maintenance</small></span><span class="d">A keypad door and four digits scratched into a wall a long way back.</span></button>
+                  <button class="ix" data-seg="5" aria-pressed="false"><span class="t">00:17:48<small>Level !</small></span><span class="n">Run for your life<small>The exit</small></span><span class="d">The lobby again, at the wrong scale. Everything followed you down.</span></button>
+                </div>
+              </div>
+            </section>
+
+            <section class="mm-panel" role="tabpanel" id="p-subjects" aria-labelledby="t-subjects" tabindex="0" hidden>
+              <div class="mm-head"><span>Function 04</span><span>Subjects</span><span class="r">Five identified</span></div>
+              <div class="mm-body">
+                <h2>Five things share the building with you</h2>
+                <p>They do not all hunt the same way. Some wait in the dark, some follow noise, and one may
+                   decide that what you needed was a hug.</p>
+                <div class="subs">
+                  <article class="sub-c"><div class="tcs">01</div><h3>Smiler</h3><p>A face in the dark. Light makes it thin out, but never makes it leave.</p></article>
+                  <article class="sub-c"><div class="tcs">02</div><h3>Skin-stealer</h3><p>It wears a person badly and waits close to a corner before it commits.</p></article>
+                  <article class="sub-c"><div class="tcs">03</div><h3>Hound</h3><p>Long sight-lines are its territory. When one runs, the pack follows.</p></article>
+                  <article class="sub-c"><div class="tcs">04</div><h3>Partygoer</h3><p>Bright, wrong and loud. It knows what a celebration should sound like.</p></article>
+                  <article class="sub-c"><div class="tcs">05</div><h3>Goblin</h3><p>Not everything down here wants to kill you. That does not make it safe.</p></article>
+                </div>
+              </div>
+            </section>
+
+            <section class="mm-panel" role="tabpanel" id="p-functions" aria-labelledby="t-functions" tabindex="0" hidden>
+              <div class="mm-head"><span>Function 05</span><span>Deck functions</span><span class="r">Touch controls included</span></div>
+              <div class="mm-body">
+                <h2>Controls</h2>
+                <p>Everything is on the hand you are already using. Nothing to rebind before you start.</p>
+                <div class="fnlist">
+                  <div class="fnitem"><span class="k">W A S D &middot; mouse</span><span class="d">Walk and point the camera</span></div>
+                  <div class="fnitem"><span class="k">Shift &middot; space &middot; C</span><span class="d">Run &middot; jump or swim up &middot; crouch or sink</span></div>
+                  <div class="fnitem"><span class="k">E</span><span class="d">Take it, open it, fill the bottle, use the way down</span></div>
+                  <div class="fnitem"><span class="k">Left mouse &middot; right mouse</span><span class="d">Swing or fire &middot; block, aim or drink</span></div>
+                  <div class="fnitem"><span class="k">Tab &middot; 1&ndash;0 &middot; wheel</span><span class="d">Open the bag &middot; equip a slot &middot; cycle what you hold</span></div>
+                  <div class="fnitem"><span class="k">F &middot; R &middot; G</span><span class="d">Torch &middot; receiver &middot; drop what you hold</span></div>
+                  <div class="fnitem"><span class="k">Esc</span><span class="d">Stop the tape and keep your place</span></div>
+                </div>
+                <p class="fine">On a phone: left thumb walks, right thumb looks, push the stick to the rim to run</p>
+              </div>
+            </section>
+
+            <section class="mm-panel" role="tabpanel" id="p-tape" aria-labelledby="t-tape" tabindex="0" hidden>
+              <div class="mm-head"><span>Function 06</span><span>Tape n&ordm;</span><span class="r">Deterministic world seed</span></div>
+              <div class="mm-body">
+                <h2>Every tape has a number</h2>
+                <p>The number is the building. The same number lays out the same floors, rooms and keypad
+                   code every time. Share it when you want somebody else to get the same descent.</p>
+                <div class="seedrow">
+                  <label class="fine" style="margin:0" for="tape-seed">Tape n&ordm;</label>
+                  <input class="seedin" id="tape-seed" name="tape-seed" type="text" inputmode="numeric" maxlength="10" spellcheck="false" aria-describedby="tape-seed-hint" />
+                  <button id="btn-play-tape" class="btn btn--key" type="button">&#9654; Load this tape</button>
+                </div>
+                <p id="tape-seed-hint" class="fine">Use a whole number from 1 to 4,294,967,295. Records stay on this device.</p>
+              </div>
+            </section>
+          </div>
+        </main>
+
+        <div class="counter">
+          <div class="counter-meta"><span>Counter</span><span>On the tube &middot; <b id="tape-counter-now">00:00:00 &middot; Level 0</b></span></div>
+          <div class="counter-track">
+            <div class="counter-fill" id="tape-counter-fill"></div>
+            <span class="counter-mark" data-i="0" style="left:0%"><span>L0</span></span>
+            <span class="counter-mark" data-i="1" style="left:18.9%"><span>L1</span></span>
+            <span class="counter-mark" data-i="2" style="left:36.2%"><span>L37</span></span>
+            <span class="counter-mark" data-i="3" style="left:56.1%"><span>L7</span></span>
+            <span class="counter-mark" data-i="4" style="left:73.7%"><span>L2</span></span>
+            <span class="counter-mark" data-i="5" style="left:91.5%"><span>L!</span></span>
+          </div>
         </div>
-        <p class="objective-pitch">six levels down · every floor charges a different price · fall back into the world</p>
-        <button id="btn-continue" class="menu-btn big hidden">CONTINUE</button>
-        <button id="btn-start" class="menu-btn big">DESCEND — PLAY FREE</button>
-        <p id="landing-records" class="warn hidden"></p>
-        <p class="warn">
-          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M12 3a8 8 0 0 0-8 8v6a2.2 2.2 0 0 0 2.2 2.2H8V13H6.2v-2a5.8 5.8 0 0 1 11.6 0v2H16v6.2h1.8A2.2 2.2 0 0 0 20 17v-6a8 8 0 0 0-8-8z"/></svg>
-          headphones strongly recommended
-        </p>
-      </header>
-
-      <main class="landing-main">
-        <section class="landing-intro">
-          <h2>A free survival horror game — right in your browser</h2>
-          <p>
-            The Backrooms is a first-person survival horror game that runs entirely in your web browser.
-            There is nothing to download, nothing to install and no account to create:
-            press play and you are inside the endless yellow halls. Free, instant, on any modern computer.
-          </p>
-        </section>
-
-        <div class="feature-grid">
-          <section class="feature">
-            <h3>An infinite maze</h3>
-            <p>Every run is procedurally generated — mono-yellow office halls, pitch-black pipe tunnels, the flooded poolrooms. No two descents are ever the same.</p>
-          </section>
-          <section class="feature">
-            <h3>You are being hunted</h3>
-            <p>Four entities stalk the levels. They follow out of sight, freeze when you spot them, slip behind corners — and strike the moment you look away.</p>
-          </section>
-          <section class="feature">
-            <h3>Scavenge &amp; survive</h3>
-            <p>You start with a torch and a receiver. Find weapons, batteries and ammunition, carry water in a bottle, and decide when to fight and when to run.</p>
-          </section>
-          <section class="feature">
-            <h3>There is a way out</h3>
-            <p>Three fuses are buried in the levels. Bring them to the exit portal, step through, and fall out of the Backrooms into the sky above the real world. Leave early with fewer fuses if your nerve goes.</p>
-          </section>
-          <section class="feature">
-            <h3>Sound is everything</h3>
-            <p>Every noise is synthesized live: the fluorescent hum, your heartbeat, and the whispers that mean something is close. Positional 3D audio — trust your ears.</p>
-          </section>
-        </div>
-
-        <section class="landing-controls controls-help">
-          <h3>Controls</h3>
-          <p>WASD move · Mouse look · Space jump · C/Ctrl crouch · Shift run</p>
-          <p>E interact / fill bottle · LMB attack · RMB block/aim/drink · TAB inventory · G drop held item · F torch · R switch receiver</p>
-          <p>1–9/0 quick equip · mouse wheel cycle items</p>
-          <p class="touch-only">On phones and tablets: left thumb steers, right thumb looks, buttons do the rest. Push the stick to the rim to sprint. Tap the hotbar to swap what's in your hand.</p>
-        </section>
-      </main>
-
-      <footer class="landing-footer">
-        <p>The Backrooms — a free WebGL horror game. No download · no install · no ads · works in Chrome, Firefox, Edge and Safari, on desktop and on mobile.</p>
-      </footer>
+      </div>
     </div>
 
     <!-- Pause menu -->
-    <div id="pause-screen" class="overlay menu-screen hidden">
-      <h1 class="game-title small">PAUSED</h1>
-      <button id="btn-resume" class="menu-btn">RESUME</button>
-      <button id="btn-save-quit" class="menu-btn">SAVE &amp; QUIT</button>
-      <button id="btn-restart" class="menu-btn ghost">RESTART — DISCARD THIS RUN</button>
-      <p id="pause-saved" class="warn"></p>
+    <div id="pause-screen" class="overlay menu-screen hidden tape-state-screen">
+      <div class="tape-state">
+        <div class="state-osd">Still &middot; tape held</div>
+        <h1 class="game-title small">&#10074;&#10074; Pause</h1>
+        <p class="state-lede">The deck is holding one frame and the building is holding your place in it.
+           Close the tab if you want &mdash; nothing down there moves while the tape is stopped.</p>
+        <div class="state-actions">
+          <button id="btn-resume" class="btn btn--key" type="button">&#9654; Play on</button>
+          <button id="btn-save-quit" class="btn" type="button">Stop and eject</button>
+          <button id="btn-restart" class="btn btn-quiet" type="button">Rewind to zero</button>
+        </div>
+        <p id="pause-saved" class="state-fine"></p>
+      </div>
     </div>
 
     <!-- Game over -->
-    <div id="gameover-screen" class="overlay menu-screen hidden">
-      <h1 class="game-title red">YOU DIED</h1>
-      <p id="gameover-cause" class="tagline"></p>
-      <p id="gameover-stats" class="tagline"></p>
-      <button id="btn-respawn" class="menu-btn">WAKE UP AGAIN</button>
+    <div id="gameover-screen" class="overlay menu-screen hidden tape-state-screen tape-death">
+      <div class="tape-state">
+        <div class="state-osd">Deck &middot; input 1</div>
+        <h1 class="game-title red">No signal</h1>
+        <p id="gameover-cause" class="state-lede"></p>
+        <p id="gameover-stats" class="state-stats"></p>
+        <div class="state-actions"><button id="btn-respawn" class="btn btn--key" type="button">&#9654; New tape</button></div>
+        <p class="state-fine">The deck has fallen back to blue. It does not mean the tape is finished.</p>
+      </div>
     </div>
 
     <!-- Escaped -->
-    <div id="escape-screen" class="overlay menu-screen hidden">
-      <h1 class="game-title out">YOU ARE OUT</h1>
-      <p id="escape-cause" class="tagline"></p>
-      <p id="escape-stats" class="tagline"></p>
-      <div id="escape-records"></div>
-      <button id="btn-again" class="menu-btn">DESCEND AGAIN</button>
-      <button id="btn-same-seed" class="menu-btn ghost">SAME SEED</button>
+    <div id="escape-screen" class="overlay menu-screen hidden tape-state-screen tape-escape">
+      <div class="tape-state">
+        <div class="state-osd">End of reel</div>
+        <h1 class="game-title out">You got out</h1>
+        <p id="escape-cause" class="state-lede"></p>
+        <p id="escape-stats" class="state-stats"></p>
+        <div id="escape-records"></div>
+        <div class="state-actions">
+          <button id="btn-again" class="btn btn--key" type="button">&#9654; New tape</button>
+          <button id="btn-same-seed" class="btn btn-quiet" type="button">Rewind</button>
+        </div>
+      </div>
     </div>
   </div>
 

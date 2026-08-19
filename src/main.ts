@@ -1,6 +1,7 @@
 import { DEV_HACKS } from './core/dev';
 import { formatTime } from './core/Records';
 import { loadSave } from './core/Save';
+import { setupTapeMenu } from './ui/TapeMenu';
 import { BIOMES, DEPTHS } from './world/Biomes';
 
 // An unfinished run remembers its own maze, so it also decides the seed —
@@ -12,6 +13,7 @@ const askedForSeed = Number.isFinite(urlSeed) && urlSeed !== 0;
 let seed = askedForSeed ? urlSeed : (save?.seed ?? (Math.random() * 0xffffffff) >>> 0);
 setSeed(seed);
 const canContinue = !!save && save.seed === seed;
+setupTapeMenu(seed);
 
 function setSeed(value: number): void {
   seed = value;
@@ -29,10 +31,22 @@ let loading = false;
 if (canContinue) {
   // The floor you're standing on says more about a run than the clock does.
   const depth = Math.max(0, Math.min(DEPTHS.length - 1, save!.depth ?? 0));
+  const level = BIOMES[DEPTHS[depth]].name;
   continueButton.textContent =
-    `CONTINUE — ${BIOMES[DEPTHS[depth]].name} · ${formatTime(save!.survivalTime)} IN`;
+    `▶ Resume — ${level} · ${formatTime(save!.survivalTime)} in`;
   continueButton.classList.remove('hidden');
   startButton.textContent = 'START OVER';
+
+  const resumeCopy = document.getElementById('tape-resume-copy');
+  const resumeTime = document.getElementById('tape-resume-time');
+  const resumeLevel = document.getElementById('tape-resume-level');
+  const resumeFuses = document.getElementById('tape-resume-fuses');
+  const resumeSeed = document.getElementById('tape-resume-seed');
+  if (resumeCopy) resumeCopy.textContent = `You stopped on ${level}, ${formatTime(save!.survivalTime)} into tape ${save!.seed}. Nothing down there moves while the tape is stopped.`;
+  if (resumeTime) resumeTime.textContent = formatTime(save!.survivalTime);
+  if (resumeLevel) resumeLevel.textContent = level;
+  if (resumeFuses) resumeFuses.textContent = `${save!.escapeFuses}/3`;
+  if (resumeSeed) resumeSeed.textContent = String(save!.seed);
 }
 
 /**

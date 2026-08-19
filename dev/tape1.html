@@ -1,0 +1,1005 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>TAPE 1 — Deck menu · The Backrooms</title>
+<meta name="description" content="Play The Backrooms free in your browser: a first-person survival horror game through six floors of an infinite, procedurally generated building, hunted by things that stalk you. No download, no install, no sign-up." />
+<meta name="robots" content="index, follow" />
+<meta name="theme-color" content="#07080a" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="The Backrooms — Free Browser Horror Game (No Download)" />
+<meta property="og:description" content="An infinite yellow maze. Entities that hunt you. Free, plays instantly in your browser." />
+<meta name="twitter:card" content="summary" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "VideoGame",
+  "name": "The Backrooms",
+  "description": "Free first-person survival horror game playable directly in the browser. Six procedurally generated floors, scavenging, thirst and oxygen, and entities that stalk you. No download or installation required.",
+  "genre": ["Horror", "Survival"],
+  "playMode": "SinglePlayer",
+  "gamePlatform": "Web Browser",
+  "applicationCategory": "Game",
+  "operatingSystem": "Any (web browser with WebGL)",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD", "availability": "https://schema.org/InStock" }
+}
+</script>
+<link rel="stylesheet" href="./fonts/fonts.css" />
+<style>
+/* ==========================================================================
+   DIRECTION 2 — "TAPE"
+   You are not looking at a game menu. You are looking at a tape somebody
+   recovered, playing back on a deck that is losing tracking. Every piece of
+   interface is the deck's on-screen display, laid over the footage.
+   ========================================================================== */
+:root{
+  --tube:#07080a;
+  --osd:#eef2f0;
+  --dim:#8b9c9c;
+  --cyan:#57d4e8;
+  --rec:#ff2f2f;
+  --blue:#0b2a6b;      /* the deck's no-signal screen */
+  --tape:#c9b458;      /* the yellow that is on the footage itself */
+
+  --osdf:"Share Tech Mono",ui-monospace,monospace;
+  --logf:"Courier Prime","Courier New",monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--tube);color:var(--osd);font-family:var(--logf);font-size:15px;line-height:1.75}
+::selection{background:var(--cyan);color:var(--tube)}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+img{display:block;max-width:100%}
+
+/* --- OSD type ------------------------------------------------------- */
+.osd{font-family:var(--osdf);letter-spacing:.14em;text-transform:uppercase}
+.tc{font-family:var(--osdf);letter-spacing:.1em;font-variant-numeric:tabular-nums}
+
+/* --- the tube: everything sits inside a CRT ------------------------- */
+.tube{position:fixed;inset:0;overflow:hidden;background:#000;z-index:0}
+.tube-shot{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .55s ease}
+.tube-shot.is-on{opacity:1}
+.tube-shot.bleed-r{mix-blend-mode:screen;filter:url(#chr-r) saturate(2.4);transform:translateX(2.5px);opacity:0}
+.tube-shot.bleed-b{mix-blend-mode:screen;filter:url(#chr-b) saturate(2.4);transform:translateX(-2.5px);opacity:0}
+.tube-shot.bleed-r.is-on,.tube-shot.bleed-b.is-on{opacity:.32}
+.tube-vig{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(122% 92% at 50% 48%,rgba(0,0,0,0) 42%,rgba(0,0,0,.82) 100%)}
+.tube-lines{position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.55) 0 1px,rgba(0,0,0,0) 1px 3px)}
+.tube-grain{position:absolute;inset:-30%;pointer-events:none;opacity:.11;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation:grain .6s steps(3) infinite}
+@keyframes grain{0%{transform:translate(0,0)}33%{transform:translate(-3%,2%)}66%{transform:translate(2%,-3%)}}
+/* head-switching noise at the bottom of the picture — the VHS tell */
+.tube-head{position:absolute;left:0;right:0;bottom:0;height:16px;pointer-events:none;opacity:.72;
+  background:repeating-linear-gradient(90deg,rgba(255,255,255,.5) 0 3px,rgba(0,0,0,.5) 3px 7px,rgba(255,255,255,.22) 7px 11px);
+  filter:blur(.6px);transform:skewX(-14deg) translateX(-6px)}
+.tube-drop{position:absolute;left:0;right:0;height:2px;pointer-events:none;background:rgba(255,255,255,.6);
+  opacity:0;animation:drop 9s linear infinite}
+@keyframes drop{0%,86%{opacity:0;top:12%}88%{opacity:.55}92%{opacity:.2;top:66%}94%,100%{opacity:0;top:88%}}
+.tube-dark{position:absolute;inset:0;background:rgba(3,4,6,.66);pointer-events:none}
+
+/* ===================== LANDING — "DECK MENU": one screen, one cursor, and the cursor is the picture ===================== */
+
+/* The landing is a screen, not a page. It never scrolls: the cursor moves
+   down a list of deck functions, and whatever the cursor is resting on is
+   what the deck is playing behind it. Long copy scrolls inside its panel,
+   the way a menu page scrolls inside a monitor. */
+html,body{height:100%}
+body{overflow:hidden}
+#s-landing{position:fixed;inset:0;
+  --gut:clamp(16px,3.4vw,46px);   /* side gutter, one value for every band */
+  --pill:60px;                    /* the room the preview pill needs at the foot */
+}
+#s-landing .tube-dark{background:rgba(3,4,6,.52)}
+
+/* Everything lives in one column: OSD header, menu, counter. Nothing is
+   positioned over anything else, so nothing can collide at any size. */
+.unit{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;overflow:hidden}
+
+/* --- deck OSD, burned into the top of the picture -------------------- */
+.deck{flex:none;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;
+  padding:16px var(--gut) 0;pointer-events:none;
+  font-family:var(--osdf);letter-spacing:.16em;text-transform:uppercase;font-size:12px;
+  text-shadow:0 0 6px rgba(0,0,0,.95),0 1px 0 rgba(0,0,0,.9)}
+.deck-tl{display:flex;align-items:center;gap:11px}
+.deck-tr{text-align:right}
+.play-glyph{color:var(--osd);font-size:15px}
+.recdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--rec);
+  box-shadow:0 0 9px var(--rec);animation:rec 1.9s steps(1) infinite;vertical-align:0}
+@keyframes rec{0%,55%{opacity:1}56%,100%{opacity:.15}}
+.deck .tc{font-size:15px;letter-spacing:.16em}
+.deck .sub{color:var(--dim);font-size:10.5px;letter-spacing:.24em;margin-top:3px}
+
+/* --- the cut: every time the cursor moves, the deck loses a field ----- */
+@media (prefers-reduced-motion:reduce){
+  #s-landing.is-cut .tube-shot.is-on{filter:none}
+  #s-landing.is-cut .tube{transform:none}
+  #s-landing.is-cut .tube-head{opacity:.72;height:16px}
+}
+#s-landing.is-cut .tube-shot.is-on{filter:contrast(1.45) brightness(1.25) saturate(.3)}
+#s-landing.is-cut .tube{transform:translate3d(-9px,0,0) scaleY(1.012)}
+#s-landing.is-cut .tube-head{opacity:1;height:34px}
+
+/* --- the menu itself -------------------------------------------------- */
+.mainmenu{flex:1;min-height:0;display:grid;
+  grid-template-columns:minmax(300px,25vw) minmax(0,1fr);
+  grid-template-rows:minmax(0,1fr);
+  gap:clamp(20px,3vw,54px);padding:clamp(10px,2.4vh,30px) var(--gut)}
+
+.mm-left{display:flex;flex-direction:column;justify-content:center;min-height:0;overflow:hidden}
+.mm-title{font-family:var(--osdf);font-size:clamp(30px,min(4.4vw,7vh),62px);line-height:.92;letter-spacing:.05em;
+  text-transform:uppercase;font-weight:400;
+  text-shadow:0 0 26px rgba(0,0,0,.85),2px 0 0 rgba(224,64,154,.4),-2px 0 0 rgba(87,212,232,.4)}
+.mm-strap{font-family:var(--osdf);font-size:clamp(9px,.85vw,10.5px);letter-spacing:.18em;text-transform:uppercase;
+  color:var(--dim);margin:12px 0 22px;text-shadow:0 0 8px rgba(0,0,0,.9)}
+
+.mm-list{border-top:1px solid rgba(238,242,240,.3)}
+.mmrow{display:grid;grid-template-columns:17px minmax(0,1fr) auto;align-items:center;gap:11px;
+  width:100%;background:transparent;border:0;border-bottom:1px solid rgba(238,242,240,.16);
+  padding:clamp(8px,1.4vh,13px) 12px clamp(8px,1.4vh,13px) 7px;cursor:pointer;text-align:left;color:var(--osd);
+  font-family:var(--osdf);font-size:clamp(14px,1.2vw,17px);letter-spacing:.16em;text-transform:uppercase;
+  text-shadow:0 0 7px rgba(0,0,0,.9)}
+.mmrow .cur{color:var(--cyan);opacity:0}
+.mmrow .val{font-size:10.5px;letter-spacing:.2em;color:var(--dim)}
+.mmrow:hover{background:rgba(238,242,240,.09)}
+.mmrow[aria-selected="true"]{background:var(--osd);color:var(--tube);text-shadow:none}
+.mmrow[aria-selected="true"] .val{color:#3b4545}
+.mmrow[aria-selected="true"] .cur{opacity:1;color:var(--tube);animation:blink 1.05s steps(1) infinite}
+@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
+.mm-keys{margin-top:14px;font-family:var(--osdf);font-size:9.5px;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--dim);text-shadow:0 0 8px rgba(0,0,0,.9)}
+.mm-keys kbd{font:inherit;border:1px solid rgba(238,242,240,.36);padding:1px 5px;color:#c4cdcb;margin-right:2px}
+
+/* --- the monitor panel: whatever the cursor is resting on -------------- */
+.mm-right{min-height:0;display:flex;align-items:center;justify-content:flex-start}
+.mm-panel{width:min(100%,700px);max-height:100%;min-height:0;display:flex;flex-direction:column;
+  border:1px solid rgba(238,242,240,.3);background:rgba(4,6,8,.8);box-shadow:0 0 46px rgba(0,0,0,.55)}
+.mm-panel[hidden]{display:none}
+.mm-panel{position:relative}
+.mm-panel.can-scroll::after{content:"";position:absolute;left:1px;right:1px;bottom:1px;height:56px;
+  pointer-events:none;background:linear-gradient(0deg,rgba(4,6,8,.95),rgba(4,6,8,0))}
+.mm-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding:10px 18px;
+  border-bottom:1px solid rgba(238,242,240,.24);font-family:var(--osdf);font-size:9.5px;
+  letter-spacing:.26em;text-transform:uppercase;color:var(--dim)}
+.mm-head .r{margin-left:auto;color:var(--cyan)}
+.mm-panel.can-scroll .mm-head::after{content:"Scroll \25BC";color:var(--cyan);opacity:.75}
+.mm-body{padding:22px clamp(18px,2.2vw,28px) 26px;overflow-y:auto;min-height:0;
+  scrollbar-width:thin;scrollbar-color:rgba(238,242,240,.35) transparent}
+.mm-body h2{font-family:var(--osdf);font-size:clamp(18px,1.9vw,23px);letter-spacing:.13em;
+  text-transform:uppercase;font-weight:400;margin-bottom:13px}
+.mm-body p{max-width:66ch;color:#cfd7d5;font-size:14.5px}
+.mm-body p + p{margin-top:12px}
+.mm-body .fine{font-family:var(--osdf);font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--dim);margin-top:16px}
+.mm-acts{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+.mm-body .btn{font-size:15px;padding:10px 22px}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:18px}
+.chips span{font-family:var(--osdf);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;
+  border:1px solid rgba(238,242,240,.32);padding:4px 9px;color:#c6cfcd}
+
+/* index: one row per segment, and the row you rest on goes on the tube */
+.ixhelp{font-family:var(--osdf);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--dim);margin:16px 0 4px}
+.ix{display:grid;grid-template-columns:84px minmax(120px,168px) minmax(0,1fr);gap:0 18px;align-items:baseline;
+  width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid rgba(238,242,240,.14);
+  padding:11px 8px;cursor:pointer;color:inherit;font:inherit}
+.ix:hover{background:rgba(238,242,240,.07)}
+.ix[aria-pressed="true"]{background:rgba(87,212,232,.1);box-shadow:inset 2px 0 0 var(--cyan)}
+.ix .t{font-family:var(--osdf);font-size:12.5px;letter-spacing:.1em;color:var(--cyan)}
+.ix .t small{display:block;font-size:9px;letter-spacing:.2em;color:var(--dim);margin-top:4px}
+.ix .n{font-family:var(--osdf);font-size:14.5px;letter-spacing:.14em;text-transform:uppercase}
+.ix .n small{display:block;font-size:9.5px;letter-spacing:.2em;color:var(--dim);margin-top:4px;text-transform:uppercase}
+.ix .d{font-size:13.5px;color:#c2ccca}
+
+/* subjects */
+.subs{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-top:18px}
+.sub-c{border:1px solid rgba(238,242,240,.24);background:rgba(238,242,240,.03);padding:13px 14px 15px}
+.sub-c .tcs{font-family:var(--osdf);font-size:10.5px;letter-spacing:.16em;color:var(--cyan)}
+.sub-c h3{font-family:var(--osdf);font-size:14.5px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:400;margin:5px 0 7px}
+.sub-c p{font-size:13px;color:#c2ccca}
+
+/* functions */
+.fnlist{border:1px solid rgba(238,242,240,.24);margin-top:18px}
+.fnitem{display:grid;grid-template-columns:236px minmax(0,1fr);gap:20px;padding:9px 15px;
+  border-bottom:1px solid rgba(238,242,240,.13)}
+.fnitem:last-child{border-bottom:0}
+.fnitem:nth-child(odd){background:rgba(238,242,240,.035)}
+.fnitem .k{font-family:var(--osdf);font-size:11.5px;letter-spacing:.13em;text-transform:uppercase}
+.fnitem .d{font-size:13.5px;color:#c2ccca}
+
+/* tape number */
+.seedrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:20px}
+.seedin{font-family:var(--osdf);font-size:17px;letter-spacing:.22em;color:var(--osd);
+  background:rgba(238,242,240,.07);border:1px solid rgba(238,242,240,.42);padding:10px 14px;width:170px}
+.seedin:focus-visible{border-color:var(--cyan)}
+
+/* --- tape counter: which of the six is on the tube right now ---------- */
+.counter{flex:none;pointer-events:none;padding:10px var(--gut) var(--pill);
+  background:linear-gradient(0deg,rgba(3,4,6,.95),rgba(3,4,6,0))}
+.counter-meta{display:flex;justify-content:space-between;gap:14px;font-family:var(--osdf);font-size:9.5px;
+  letter-spacing:.22em;color:var(--dim);text-transform:uppercase;margin-bottom:7px}
+.counter-meta b{color:var(--osd);font-weight:400}
+.counter-track{position:relative;height:4px;background:rgba(238,242,240,.2)}
+.counter-fill{position:absolute;left:0;top:0;bottom:0;background:var(--osd);width:0;
+  transition:width .3s cubic-bezier(.2,.7,.3,1)}
+.counter-mark{position:absolute;top:-4px;width:1px;height:12px;background:rgba(238,242,240,.5)}
+.counter-mark span{position:absolute;top:14px;left:0;font-family:var(--osdf);font-size:8.5px;
+  letter-spacing:.16em;color:var(--dim)}
+.counter-mark[data-on="1"]{background:var(--cyan);height:16px;top:-6px}
+.counter-mark[data-on="1"] span{color:var(--cyan)}
+
+/* under this width the preview pill wraps onto two lines and needs more room */
+@media (max-width:760px){#s-landing{--pill:76px}}
+@media (max-width:1080px){
+  .mainmenu{grid-template-columns:minmax(250px,32vw) minmax(0,1fr);gap:24px}
+  .fnitem{grid-template-columns:1fr;gap:3px}
+  .ix{grid-template-columns:74px minmax(0,1fr);gap:0 14px}
+  .ix .d{grid-column:1/-1;margin-top:6px}
+}
+@media (max-width:820px){
+  /* the rail stops being a rail: the list goes across the top of the panel */
+  .mainmenu{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);
+    gap:14px;padding:10px var(--gut)}
+  .mm-left{justify-content:flex-start;overflow:visible}
+  .mm-title{font-size:clamp(26px,7.4vw,40px)}
+  .mm-strap{margin:8px 0 14px}
+  .mm-list{display:grid;grid-template-columns:1fr 1fr;border-left:1px solid rgba(238,242,240,.16)}
+  .mmrow{font-size:13px;letter-spacing:.12em;padding:10px 9px;
+    grid-template-columns:13px minmax(0,1fr);border-right:1px solid rgba(238,242,240,.16)}
+  .mmrow .val{display:none}
+  .mm-keys{display:none}
+  .mm-body{padding:16px 15px 20px}
+  .mm-body h2{font-size:18px}
+}
+@media (max-width:430px){
+  .mm-list{grid-template-columns:1fr 1fr}
+  .mmrow{font-size:12px;padding:9px 7px}
+  .counter-mark span{display:none}
+  /* on a screen this small the button has to come before the story */
+  .mm-body{display:flex;flex-direction:column}
+  .mm-body h2{order:-2;font-size:17px}
+  .mm-acts{order:-1;margin-top:14px}
+  .mm-head{font-size:8.5px;letter-spacing:.2em}
+  .mm-head .r{display:none}
+  .counter-meta > span:first-child{display:none}
+  .counter-meta{justify-content:flex-end}
+}
+/* short screens — laptops at 768 tall, and any phone turned sideways */
+@media (max-height:620px){
+  .deck{padding-top:11px;font-size:11px}
+  .deck .tc{font-size:13px}
+  .deck .sub{display:none}
+  .mm-strap{margin:9px 0 14px}
+  .mm-keys{margin-top:9px}
+  .mm-head{padding:7px 16px}
+  .mm-body{padding:16px 18px 18px}
+}
+@media (max-height:470px){
+  .mm-title{font-size:clamp(22px,5vh,30px)}
+  .mm-strap,.mm-keys{display:none}
+  .mmrow{padding:6px 10px 6px 6px;font-size:12.5px}
+  .counter{padding-top:6px}
+  .counter-meta{margin-bottom:5px}
+}
+
+/* ======================= IN-GAME SCREENS ============================= */
+.screen{display:none}
+.screen.is-on{display:block}
+.stage{position:fixed;inset:0;overflow:hidden;background:#000;z-index:2}
+.stage-shot{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+
+/* HUD — the camcorder's own display */
+.cam{position:absolute;inset:0;pointer-events:none;font-family:var(--osdf);
+  letter-spacing:.16em;text-transform:uppercase;color:var(--osd);text-shadow:0 0 6px rgba(0,0,0,.95)}
+.cam-tl{position:absolute;left:26px;top:22px;display:flex;align-items:center;gap:11px;font-size:13px}
+.cam-tr{position:absolute;right:26px;top:22px;text-align:right;font-size:13px}
+.cam-tr .sub{font-size:9.5px;letter-spacing:.24em;color:var(--dim);margin-top:3px}
+.cam-obj{position:absolute;left:26px;top:64px;font-size:11px;line-height:2.05}
+.cam-obj .hl{color:var(--cyan)}
+.cam-obj .bar{display:inline-block;width:52px;height:8px;border:1px solid var(--osd);vertical-align:-1px;margin-left:5px}
+.cam-obj .bar i{display:block;height:100%;background:var(--cyan)}
+.cam-meters{position:absolute;left:26px;bottom:38px;display:flex;flex-direction:column;gap:7px;font-size:10px}
+.meter{display:grid;grid-template-columns:38px 152px 26px;align-items:center;gap:9px}
+.meter .seg-track{display:flex;gap:2px}
+.meter .seg-track i{flex:1;height:9px;background:rgba(238,242,240,.22);box-shadow:0 0 3px rgba(0,0,0,.8)}
+.meter .seg-track i.on{background:var(--osd)}
+.meter.warn .seg-track i.on{background:var(--rec)}
+.meter.warn span:first-child{color:var(--rec)}
+.meter .val{text-align:right;color:var(--dim);font-size:9.5px}
+.cam-held{position:absolute;right:26px;bottom:38px;text-align:right;font-size:13px}
+.cam-held .sub{font-size:9.5px;letter-spacing:.24em;color:var(--dim);margin-top:3px}
+.cam-prompt{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);font-size:12px;
+  border:1px solid rgba(238,242,240,.55);background:rgba(4,6,8,.6);padding:6px 15px}
+.cam-cross{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:28px;height:28px;opacity:.95}
+.cam-cross path{stroke:var(--osd);stroke-width:1.4;fill:none;filter:drop-shadow(0 0 2px #000)}
+
+/* Pause — the deck holds a still frame */
+.stage-still{filter:saturate(.55) contrast(1.12)}
+.still-band{position:absolute;left:0;right:0;top:58%;height:26px;pointer-events:none;opacity:.85;
+  background:repeating-linear-gradient(90deg,rgba(255,255,255,.42) 0 4px,rgba(0,0,0,.5) 4px 9px);
+  filter:blur(1px);animation:bandroll 5.5s linear infinite}
+@keyframes bandroll{0%{top:-4%}100%{top:104%}}
+.mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:22px;padding:28px;text-align:center;overflow-y:auto}
+.mid-osd{font-family:var(--osdf);letter-spacing:.24em;text-transform:uppercase}
+.mid h2{font-family:var(--osdf);font-size:clamp(40px,9vw,104px);letter-spacing:.14em;text-transform:uppercase;
+  font-weight:400;line-height:.98;text-shadow:0 0 30px rgba(0,0,0,.9),3px 0 0 rgba(224,64,154,.4),-3px 0 0 rgba(87,212,232,.4)}
+.mid .lede{max-width:52ch;color:#d2dad8;font-size:15px}
+.readout{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:1px;background:rgba(238,242,240,.28);
+  border:1px solid rgba(238,242,240,.28);width:min(680px,100%)}
+.readout div{background:rgba(4,6,8,.86);padding:12px 14px;text-align:left}
+.readout .k{font-family:var(--osdf);font-size:9px;letter-spacing:.26em;color:var(--dim);text-transform:uppercase;display:block}
+.readout .v{font-family:var(--osdf);font-size:19px;letter-spacing:.1em;margin-top:4px;display:block}
+.readout .v.cy{color:var(--cyan)}
+.readout .v.rd{color:var(--rec)}
+.mid-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.btn{font-family:var(--osdf);font-size:17px;letter-spacing:.2em;text-transform:uppercase;
+  padding:12px 26px;border:1px solid var(--osd);background:transparent;color:var(--osd);cursor:pointer;
+  display:inline-flex;align-items:center;gap:10px;transition:background .14s ease,color .14s ease}
+.btn:hover{background:var(--osd);color:var(--tube)}
+.btn--key{background:var(--osd);color:var(--tube)}
+.btn--key:hover{background:var(--cyan);border-color:var(--cyan);color:var(--tube)}
+.mid .fine{font-family:var(--osdf);font-size:10px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase}
+
+/* Death — the deck loses the signal and falls back to its blue screen */
+.nosignal{position:absolute;inset:0;background:var(--blue)}
+.nosignal::after{content:"";position:absolute;inset:0;opacity:.16;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E")}
+.snowband{position:absolute;left:0;right:0;top:0;height:44%;
+  -webkit-mask-image:linear-gradient(180deg,#000 0%,#000 52%,transparent 100%);
+  mask-image:linear-gradient(180deg,#000 0%,#000 52%,transparent 100%);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='4'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity:.55;animation:grain .4s steps(2) infinite}
+
+/* --- END OF REEL -----------------------------------------------------
+   The tape does not end on a menu. It ends on the first daylight in
+   nineteen minutes, and the deck is still rolling and still losing
+   tracking while it plays. Nothing on this screen is a still: the picture
+   is stacked out of copies of one frame so the deck can pull them apart —
+   luma, red, cyan, and the band it cannot read this second. Everything
+   else is either the camera's own stamp or the two things you can do. */
+/* the one frame this whole screen is built from — every layer below reads it */
+#s-escape .stage{background:#04050a;--endframe:url("./frames/outside.webp")}
+
+/* the whole picture, displaced as one, when the deck drops a field */
+.reel-glitch{position:absolute;inset:0;
+  transition:transform .05s steps(1,end),filter .05s steps(1,end)}
+#s-escape.is-drop .reel-glitch{transform:translate3d(-12px,0,0) scaleY(1.016);
+  filter:contrast(1.5) brightness(1.2) saturate(.24)}
+#s-escape.is-skew .reel-glitch{transform:translate3d(7px,-3px,0) skewX(.7deg);
+  filter:contrast(1.18) hue-rotate(9deg)}
+
+/* The frame itself does not move. The overscan is only there so the tears and
+   the dropouts can throw the picture sideways without exposing an edge, and
+   the isolation keeps the screen-blended chroma layers blending with each
+   other rather than with the tube behind them. */
+.reel-cam{position:absolute;inset:-5%;isolation:isolate}
+
+.reel-lay{position:absolute;inset:0;
+  background:var(--endframe) center/cover no-repeat,
+             linear-gradient(170deg,#7d7f96 0%,#4a5560 52%,#2a3128 100%)}
+.reel-lay--base{filter:brightness(1.06) contrast(.96) saturate(.74);
+  animation:iris 11s ease-in-out infinite}
+/* the luma smear that trails every edge on a fourth-generation dub */
+.reel-lay--smear{mix-blend-mode:screen;opacity:.26;
+  filter:blur(2.6px) brightness(1.22);transform:translate3d(6px,0,0)}
+/* colour-under: the chroma track never lines up with the luma track */
+.reel-lay--r{mix-blend-mode:screen;opacity:.32;filter:url(#chr-r) saturate(2.2);
+  animation:chroma-r 6.3s ease-in-out infinite}
+.reel-lay--c{mix-blend-mode:screen;opacity:.32;filter:url(#chr-b) saturate(2.2);
+  animation:chroma-c 6.3s ease-in-out infinite}
+
+/* tracking: a band the head misreads, thrown sideways, walking up the frame */
+.reel-tear{position:absolute;inset:0;background:var(--endframe) center/cover no-repeat;
+  filter:saturate(.3) brightness(1.3) contrast(1.35);clip-path:inset(100% 0 -2% 0)}
+.reel-tear--a{animation:tear-a 8.5s linear infinite}
+.reel-tear--b{animation:tear-b 13.5s linear infinite}
+
+/* a soft bar of gain rolling down the tube, the tape's own heartbeat */
+.reel-roll{position:absolute;left:-2%;right:-2%;height:30vh;pointer-events:none;opacity:.2;
+  mix-blend-mode:overlay;animation:rollband 7.5s linear infinite;
+  background:linear-gradient(180deg,transparent,rgba(255,255,255,.65),transparent)}
+/* snow, held back until the deck actually drops something */
+.reel-snow{position:absolute;inset:-20%;pointer-events:none;opacity:0;mix-blend-mode:screen;
+  transition:opacity .06s linear;animation:grain .28s steps(3) infinite;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E")}
+#s-escape.is-drop .reel-snow,#s-escape.is-skew .reel-snow{opacity:.4}
+#s-escape .tube-head{animation:headsw .2s steps(2) infinite}
+#s-escape .end-grade{position:absolute;inset:0;pointer-events:none;background:
+  linear-gradient(180deg,rgba(3,5,9,.52) 0%,rgba(3,5,9,.04) 22%,rgba(3,5,9,.08) 46%,rgba(3,5,9,.74) 100%),
+  radial-gradient(130% 105% at 50% 50%,rgba(3,5,9,.44) 0%,rgba(3,5,9,0) 78%)}
+#s-escape .tube-vig{background:radial-gradient(126% 96% at 50% 48%,rgba(0,0,0,0) 46%,rgba(0,0,0,.62) 100%)}
+#s-escape .tube-head{opacity:.6}
+
+/* the auto-iris has not had to solve for daylight since the first corridor */
+@keyframes iris{
+  0%,100%{filter:brightness(1.24) contrast(.9) saturate(.66)}
+  21%{filter:brightness(.96) contrast(1.1) saturate(.82)}
+  47%{filter:brightness(1.1) contrast(.97) saturate(.72)}
+  73%{filter:brightness(1.02) contrast(1.05) saturate(.78)}
+}
+@keyframes chroma-r{
+  0%,100%{transform:translate3d(2.4px,0,0)}
+  16%{transform:translate3d(5.6px,-.5px,0)}
+  33%{transform:translate3d(1.3px,.5px,0)}
+  52%{transform:translate3d(4.1px,0,0)}
+  71%{transform:translate3d(2px,-1px,0)}
+}
+@keyframes chroma-c{
+  0%,100%{transform:translate3d(-2.4px,0,0)}
+  16%{transform:translate3d(-5.6px,.5px,0)}
+  33%{transform:translate3d(-1.3px,-.5px,0)}
+  52%{transform:translate3d(-4.1px,0,0)}
+  71%{transform:translate3d(-2px,1px,0)}
+}
+@keyframes tear-a{
+  0%{clip-path:inset(100% 0 -2% 0);transform:translateX(0);animation-timing-function:steps(1,end)}
+  62%{clip-path:inset(74% 0 22% 0);transform:translateX(-19px);animation-timing-function:steps(1,end)}
+  66%{clip-path:inset(61% 0 36% 0);transform:translateX(11px);animation-timing-function:steps(1,end)}
+  69%{clip-path:inset(49% 0 49% 0);transform:translateX(-7px);animation-timing-function:steps(1,end)}
+  72%{clip-path:inset(38% 0 61% 0);transform:translateX(4px);animation-timing-function:steps(1,end)}
+  75%,100%{clip-path:inset(-2% 0 100% 0);transform:translateX(0)}
+}
+@keyframes tear-b{
+  0%{clip-path:inset(100% 0 -2% 0);transform:translateX(0);animation-timing-function:steps(1,end)}
+  40%{clip-path:inset(29% 0 69% 0);transform:translateX(13px);animation-timing-function:steps(1,end)}
+  43%{clip-path:inset(17% 0 81% 0);transform:translateX(-9px);animation-timing-function:steps(1,end)}
+  46%,100%{clip-path:inset(-2% 0 100% 0);transform:translateX(0)}
+}
+@keyframes rollband{0%{top:-32vh}100%{top:100vh}}
+@keyframes headsw{
+  0%{transform:skewX(-13deg) translateX(-8px)}
+  100%{transform:skewX(-13deg) translateX(5px)}
+}
+
+/* --- what the deck burns into the corners ---------------------------- */
+.reel-osd{position:absolute;z-index:3;pointer-events:none;font-family:var(--osdf);color:var(--osd);
+  letter-spacing:.2em;text-transform:uppercase;
+  text-shadow:0 0 10px rgba(0,0,0,.95),0 2px 0 rgba(0,0,0,.55)}
+.reel-osd.tl{left:clamp(20px,4vw,44px);top:clamp(18px,3.4vw,34px);font-size:20px;
+  display:flex;align-items:center;gap:12px}
+.reel-osd.tr{right:clamp(20px,4vw,44px);top:clamp(18px,3.4vw,34px);font-size:20px}
+.reel-osd.bl{left:clamp(20px,4vw,44px);bottom:clamp(18px,3.4vw,34px);font-size:22px;line-height:1.3}
+.reel-osd .play-glyph{font-size:17px}
+
+/* --- the only two things left to decide ------------------------------ */
+.out{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:20px;text-align:center;padding:96px 24px 132px;
+  overflow-y:auto}
+.out .k{font-family:var(--osdf);font-size:10.5px;letter-spacing:.34em;text-transform:uppercase;
+  color:var(--cyan);text-shadow:0 0 12px rgba(0,0,0,.9)}
+.out h2{font-family:var(--osdf);font-size:clamp(38px,7.4vw,88px);line-height:.98;letter-spacing:.1em;
+  text-transform:uppercase;font-weight:400;
+  text-shadow:0 0 40px rgba(0,0,0,.9),3px 0 0 rgba(224,64,154,.42),-3px 0 0 rgba(87,212,232,.42)}
+.out .l{font-family:var(--osdf);font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+  color:#c4cdcb;text-shadow:0 0 12px rgba(0,0,0,.95)}
+.out-a{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:10px}
+
+/* --- dev chrome ------------------------------------------------------ */
+.devbar{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:99;display:flex;gap:2px;padding:4px;
+  border-radius:999px;background:rgba(18,18,20,.92);border:1px solid rgba(255,255,255,.18);
+  font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.1em;box-shadow:0 6px 24px rgba(0,0,0,.5)}
+.devbar button{font:inherit;color:#b9b9c2;background:transparent;border:0;border-radius:999px;padding:6px 12px;
+  cursor:pointer;text-transform:uppercase}
+.devbar button:hover{color:#fff;background:rgba(255,255,255,.09)}
+.devbar button[aria-current="true"]{background:#eef2f0;color:#07080a}
+.devbar .tag{color:#6c6c78;padding:6px 10px 6px 12px}
+
+@media (max-width:430px){
+  .devbar{font-size:8.5px;padding:3px}
+  .devbar button{padding:5px 7px}
+  .devbar .tag{padding:5px 5px 5px 7px}
+}
+@media (max-width:880px){
+  .cam-meters{bottom:66px}
+}
+@media (max-width:560px){
+  .cam-tl,.cam-tr{font-size:11px}
+  .cam-obj{font-size:10px;top:58px;line-height:1.95}
+  .cam-meters{bottom:24px;font-size:9px;gap:6px}
+  .meter{grid-template-columns:32px 104px 22px;gap:8px}
+  .meter .seg-track i{height:8px}
+  .cam-held{bottom:96px;font-size:12px}
+  .cam-prompt{bottom:146px;font-size:11px;max-width:82vw;text-align:center}
+  .readout{grid-template-columns:1fr 1fr}
+  .reel-osd.tl,.reel-osd.tr{font-size:15px}
+  .reel-osd.bl{font-size:16px;bottom:78px}
+  .out{padding:80px 20px 116px;gap:16px}
+  .out .l{font-size:11px}
+  .out-a .btn{flex:1 1 100%;justify-content:center}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <filter id="chr-r"><feColorMatrix type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/></filter>
+  <filter id="chr-b"><feColorMatrix type="matrix" values="0 0 0 0 0  0 0.5 0 0 0  0 0 1 0 0  0 0 0 1 0"/></filter>
+</defs></svg>
+
+
+<!-- ====================== LANDING ====================== -->
+<div class="screen is-on" id="s-landing">
+  <div class="tube">
+    <img class="tube-shot is-on" data-seg="0" src="./frames/lobby.webp" alt="" fetchpriority="high" decoding="async" />
+    <img class="tube-shot" data-seg="1" src="./frames/parking.webp" alt="" decoding="async" />
+    <img class="tube-shot" data-seg="2" src="./frames/poolrooms.webp" alt="" decoding="async" />
+    <img class="tube-shot" data-seg="3" src="./frames/poolrooms.webp" alt="" decoding="async" style="filter:hue-rotate(-16deg) brightness(.55) saturate(1.5)" />
+    <img class="tube-shot" data-seg="4" src="./frames/pipes.webp" alt="" decoding="async" />
+    <img class="tube-shot" data-seg="5" src="./frames/run.webp" alt="" decoding="async" />
+    <img class="tube-shot bleed-r is-on" src="./frames/lobby.webp" alt="" decoding="async" />
+    <img class="tube-shot bleed-b is-on" src="./frames/lobby.webp" alt="" decoding="async" />
+    <div class="tube-dark"></div>
+    <div class="tube-grain"></div>
+    <div class="tube-lines"></div>
+    <div class="tube-drop"></div>
+    <div class="tube-vig"></div>
+    <div class="tube-head"></div>
+  </div>
+
+  <div class="unit">
+  <header class="deck">
+    <div class="deck-tl"><span class="play-glyph">&#9654;</span><span>Play</span><span class="tc">SP</span>
+      <span class="recdot"></span></div>
+    <div class="deck-tr"><div class="tc" id="clock">00:00:14:09</div><div class="sub">Tape 04 of &infin;</div></div>
+  </header>
+
+  <main class="mainmenu">
+    <div class="mm-left">
+      <h1 class="mm-title">The<br />Backrooms</h1>
+      <p class="mm-strap">Free browser horror &middot; no download</p>
+
+      <div class="mm-list" role="tablist" aria-orientation="vertical" aria-label="Deck functions">
+        <button class="mmrow" role="tab" id="t-play" aria-controls="p-play" aria-selected="true" tabindex="0" data-seg="0">
+          <span class="cur" aria-hidden="true">&#9654;</span><span>Play</span><span class="val">New tape</span></button>
+        <button class="mmrow" role="tab" id="t-resume" aria-controls="p-resume" aria-selected="false" tabindex="-1" data-seg="1">
+          <span class="cur" aria-hidden="true">&#9654;</span><span>Resume</span><span class="val">00:08:41</span></button>
+        <button class="mmrow" role="tab" id="t-index" aria-controls="p-index" aria-selected="false" tabindex="-1" data-seg="0">
+          <span class="cur" aria-hidden="true">&#9654;</span><span>Index</span><span class="val">6 segments</span></button>
+        <button class="mmrow" role="tab" id="t-subjects" aria-controls="p-subjects" aria-selected="false" tabindex="-1" data-seg="4">
+          <span class="cur" aria-hidden="true">&#9654;</span><span>Subjects</span><span class="val">4 &middot; unnamed</span></button>
+        <button class="mmrow" role="tab" id="t-functions" aria-controls="p-functions" aria-selected="false" tabindex="-1" data-seg="5">
+          <span class="cur" aria-hidden="true">&#9654;</span><span>Functions</span><span class="val">Controls</span></button>
+        <button class="mmrow" role="tab" id="t-tape" aria-controls="p-tape" aria-selected="false" tabindex="-1" data-seg="2">
+          <span class="cur" aria-hidden="true">&#9654;</span><span>Tape n&ordm;</span><span class="val">1234</span></button>
+      </div>
+
+      <p class="mm-keys"><kbd>&uarr;</kbd><kbd>&darr;</kbd> move the cursor &middot; <kbd>Enter</kbd> select</p>
+    </div>
+
+    <div class="mm-right">
+      <!-- PLAY -->
+      <section class="mm-panel" role="tabpanel" id="p-play" aria-labelledby="t-play" tabindex="0">
+        <div class="mm-head"><span>Function 01</span><span>Play</span><span class="r">Tape loaded</span></div>
+        <div class="mm-body">
+          <h2>A free horror game in your browser</h2>
+          <p>Nineteen minutes and twenty-seven seconds of tape came back. The person holding the camera
+             did not. Press play and you are the next one holding it: a first-person descent through six
+             floors of a building that has no outside, hunted the whole way down.</p>
+          <div class="mm-acts">
+            <button class="btn btn--key">&#9654; Play &mdash; new tape</button>
+          </div>
+          <p class="fine" style="margin-bottom:20px">Sound carries further than the picture &mdash; headphones recommended</p>
+          <p>It runs in the browser on WebGL. There is nothing to download, nothing to install and no
+             account to make &mdash; the tape starts the moment you press play, on a computer or a phone.</p>
+          <div class="chips">
+            <span>Free</span><span>No download</span><span>No sign-up</span>
+            <span>WebGL</span><span>Keyboard, mouse or touch</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- RESUME -->
+      <section class="mm-panel" role="tabpanel" id="p-resume" aria-labelledby="t-resume" tabindex="0" hidden>
+        <div class="mm-head"><span>Function 02</span><span>Resume</span><span class="r">Tape 1234</span></div>
+        <div class="mm-body">
+          <h2>Your tape is still in the deck</h2>
+          <p>You stopped at 00:08:41, one floor into the parking, carrying one of the three fuses. Nothing
+             down there moves while the tape is stopped: shut the tab, come back next week, the building
+             is holding your place in it.</p>
+          <div class="mm-acts">
+            <button class="btn btn--key">&#9654; Resume at 00:08:41</button>
+            <button class="btn">Rewind to zero</button>
+          </div>
+          <p class="fine" style="margin-bottom:20px">Rewinding wipes this descent &mdash; your records survive it</p>
+          <div class="readout">
+            <div><span class="k">Position</span><span class="v cy">00:08:41</span></div>
+            <div><span class="k">Segment</span><span class="v">Level 1</span></div>
+            <div><span class="k">Fuses</span><span class="v">1 / 3</span></div>
+            <div><span class="k">Tape</span><span class="v">1234</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- INDEX -->
+      <section class="mm-panel" role="tabpanel" id="p-index" aria-labelledby="t-index" tabindex="0" hidden>
+        <div class="mm-head"><span>Function 03</span><span>Index</span><span class="r">Six segments &middot; one direction</span></div>
+        <div class="mm-body">
+          <h2>Six floors, one direction</h2>
+          <p>The deck reads six clean segments and will not say what is between them. Each one is a floor
+             with its own light, its own way down and its own price.</p>
+          <p class="ixhelp">Pick a segment to put it on the tube</p>
+          <div class="ixlist">
+            <button class="ix" data-seg="0" aria-pressed="true">
+              <span class="t">00:00:00<small>03m 41s</small></span>
+              <span class="n">Level 0<small>The lobby</small></span>
+              <span class="d">Mono-yellow wallpaper, damp carpet, a light fitting every four metres for as
+                long as the tape runs. Nothing happens for three minutes.</span></button>
+            <button class="ix" data-seg="1" aria-pressed="false">
+              <span class="t">00:03:41<small>03m 21s</small></span>
+              <span class="n">Level 1<small>Front parking</small></span>
+              <span class="d">Concrete ceiling, sodium light, sight-lines a hundred metres long &mdash; and
+                twice, something standing at the end of one.</span></button>
+            <button class="ix" data-seg="2" aria-pressed="false">
+              <span class="t">00:07:02<small>03m 53s</small></span>
+              <span class="n">Level 37<small>The poolrooms</small></span>
+              <span class="d">Warm water, white tile, light coming up through it. The only floor that looks
+                like somewhere a person would want to stay.</span></button>
+            <button class="ix" data-seg="3" aria-pressed="false">
+              <span class="t">00:10:55<small>03m 25s</small></span>
+              <span class="n">Level 7<small>Thalassophobia</small></span>
+              <span class="d">The ceiling is under the surface. Everything from here is shot swimming, on
+                whatever breath you can ration.</span></button>
+            <button class="ix" data-seg="4" aria-pressed="false">
+              <span class="t">00:14:20<small>03m 28s</small></span>
+              <span class="n">Level 2<small>Pipe dreams</small></span>
+              <span class="d">No light but the one bolted to the camera. A keypad door, and its four digits
+                scratched into a wall a long way back.</span></button>
+            <button class="ix" data-seg="5" aria-pressed="false">
+              <span class="t">00:17:48<small>01m 39s</small></span>
+              <span class="n">Level !<small>Run for your life</small></span>
+              <span class="d">The lobby again, at the wrong scale. The exit is on this segment. So is
+                everything that followed you down to it.</span></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- SUBJECTS -->
+      <section class="mm-panel" role="tabpanel" id="p-subjects" aria-labelledby="t-subjects" tabindex="0" hidden>
+        <div class="mm-head"><span>Function 04</span><span>Subjects</span><span class="r">Four &middot; none identified</span></div>
+        <div class="mm-body">
+          <h2>Four things share the building with you</h2>
+          <p>Frame by frame, four subjects appear more than once. None of them is ever fully in shot. The
+             timecodes are the first appearance of each.</p>
+          <div class="subs">
+            <article class="sub-c"><div class="tcs">00:02:14</div><h3>It stops when you look</h3>
+              <p>In nine frames. Moves only while the camera is pointed somewhere else, and is out of focus
+                 in every single frame it is in.</p></article>
+            <article class="sub-c"><div class="tcs">00:06:31</div><h3>It is wearing somebody</h3>
+              <p>Upright, and it gets the arms wrong. Twice at a distance, once close. The close one is why
+                 this tape was handed in.</p></article>
+            <article class="sub-c"><div class="tcs">00:09:03</div><h3>It hunts the long runs</h3>
+              <p>Never in shot. Audible on the left channel for a full minute before the running starts:
+                 it was tracking sound, not light.</p></article>
+            <article class="sub-c"><div class="tcs">00:18:20</div><h3>They arrive together</h3>
+              <p>Last segment. Count them in the reflections rather than the corridor &mdash; there are
+                 always more in the reflection.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <!-- FUNCTIONS -->
+      <section class="mm-panel" role="tabpanel" id="p-functions" aria-labelledby="t-functions" tabindex="0" hidden>
+        <div class="mm-head"><span>Function 05</span><span>Deck functions</span><span class="r">Touch devices map to on-screen controls</span></div>
+        <div class="mm-body">
+          <h2>Controls</h2>
+          <p>Everything is on the hand you are already using. Nothing to rebind before you start.</p>
+          <div class="fnlist">
+            <div class="fnitem"><span class="k">W A S D &middot; mouse</span><span class="d">Walk, and point the camera</span></div>
+            <div class="fnitem"><span class="k">Shift &middot; space &middot; C</span><span class="d">Run &middot; jump or swim up &middot; crouch or sink</span></div>
+            <div class="fnitem"><span class="k">E</span><span class="d">Take it, open it, fill the bottle, use the way down</span></div>
+            <div class="fnitem"><span class="k">Left mouse &middot; right mouse</span><span class="d">Swing or fire &middot; block, aim, or drink</span></div>
+            <div class="fnitem"><span class="k">Tab &middot; 1&ndash;0 &middot; wheel</span><span class="d">Open the bag &middot; equip a slot &middot; cycle what you hold</span></div>
+            <div class="fnitem"><span class="k">F &middot; R &middot; G</span><span class="d">Torch &middot; receiver &middot; drop what you hold</span></div>
+            <div class="fnitem"><span class="k">Esc</span><span class="d">Stop the tape and keep your place</span></div>
+          </div>
+          <p class="fine">On a phone: left thumb walks, right thumb looks, push the stick to the rim to run</p>
+        </div>
+      </section>
+
+      <!-- TAPE Nº -->
+      <section class="mm-panel" role="tabpanel" id="p-tape" aria-labelledby="t-tape" tabindex="0" hidden>
+        <div class="mm-head"><span>Function 06</span><span>Tape n&ordm;</span><span class="r">Six digits or fewer</span></div>
+        <div class="mm-body">
+          <h2>Every tape has a number</h2>
+          <p>The number is the building. The same digits lay out the same six floors every time &mdash; the
+             same doors, the same keypad code, the same long room you have to cross twice. Hand somebody
+             your number and they get your descent, not a different one.</p>
+          <div class="seedrow">
+            <label class="fine" style="margin:0" for="seed">Tape n&ordm;</label>
+            <input class="seedin" id="seed" name="seed" type="text" inputmode="numeric" value="1234" spellcheck="false" />
+            <button class="btn btn--key">&#9654; Play this tape</button>
+          </div>
+          <div class="readout" style="margin-top:22px">
+            <div><span class="k">Deepest floor</span><span class="v">Level 2</span></div>
+            <div><span class="k">Fastest way out</span><span class="v cy">00:11:04</span></div>
+            <div><span class="k">Tapes started</span><span class="v">7</span></div>
+            <div><span class="k">Tapes returned</span><span class="v rd">1</span></div>
+          </div>
+          <p class="fine">Records are kept on this device only. Nothing is uploaded and nobody is counting but you</p>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div class="counter" aria-hidden="true">
+    <div class="counter-meta"><span>Counter</span><span>On the tube &middot; <b id="ct-now">00:00:00 &middot; Level 0</b></span></div>
+    <div class="counter-track">
+      <div class="counter-fill" id="ct-fill"></div>
+      <span class="counter-mark" data-i="0" style="left:0%"><span>L0</span></span>
+      <span class="counter-mark" data-i="1" style="left:18.9%"><span>L1</span></span>
+      <span class="counter-mark" data-i="2" style="left:36.2%"><span>L37</span></span>
+      <span class="counter-mark" data-i="3" style="left:56.1%"><span>L7</span></span>
+      <span class="counter-mark" data-i="4" style="left:73.7%"><span>L2</span></span>
+      <span class="counter-mark" data-i="5" style="left:91.5%"><span>L!</span></span>
+    </div>
+  </div>
+  </div>
+</div>
+
+<noscript>
+  <p style="position:fixed;inset:auto 0 0 0;z-index:99;padding:14px;background:#07080a;color:#eef2f0;
+     font-family:'Courier Prime',monospace;font-size:14px;text-align:center">
+    The Backrooms is a free browser horror game with nothing to download &mdash; but it needs
+    JavaScript and WebGL switched on to run.</p>
+</noscript>
+<!-- ====================== HUD ====================== -->
+<div class="screen" id="s-hud">
+  <div class="stage">
+    <img class="stage-shot" src="./frames/pipes.webp" alt="" />
+    <div class="tube-lines" style="opacity:.34"></div>
+    <div class="tube-head" style="opacity:.42;height:12px"></div>
+    <div class="cam">
+      <div class="cam-tl"><span class="recdot"></span><span>Rec</span><span class="tc">SP</span></div>
+      <div class="cam-tr"><div class="tc" style="font-size:15px">00:14:52</div><div class="sub">Level 2 &middot; pipe dreams</div></div>
+
+      <div class="cam-obj">
+        <div>Fuses <span class="hl">1 / 3</span></div>
+        <div>Bearing <span class="hl">214&deg;</span> &middot; 38 m</div>
+        <div>Lamp <span class="bar"><i style="width:58%"></i></span></div>
+      </div>
+
+      <div class="cam-meters">
+        <div class="meter"><span>Body</span>
+          <div class="seg-track"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div>
+          <span class="val">74</span></div>
+        <div class="meter warn"><span>Water</span>
+          <div class="seg-track"><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <span class="val">22</span></div>
+        <div class="meter"><span>Air</span>
+          <div class="seg-track"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+          <span class="val">100</span></div>
+      </div>
+
+      <div class="cam-held"><div>Pipe wrench</div><div class="sub">Condition 9 / 10</div></div>
+      <div class="cam-prompt">E &nbsp;&mdash;&nbsp; Prise the panel open</div>
+      <svg class="cam-cross" viewBox="0 0 28 28" aria-hidden="true">
+        <path d="M14 2v7M14 19v7M2 14h7M19 14h7"/><circle cx="14" cy="14" r="1.5" fill="#eef2f0" stroke="none"/>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== PAUSE ====================== -->
+<div class="screen" id="s-pause">
+  <div class="stage">
+    <img class="stage-shot stage-still" src="./frames/parking.webp" alt="" />
+    <div class="tube-dark"></div>
+    <div class="tube-lines"></div>
+    <div class="still-band"></div>
+    <div class="mid">
+      <div class="mid-osd" style="font-size:11px;color:var(--dim)">Still &middot; tape held</div>
+      <h2>&#10074;&#10074; Pause</h2>
+      <p class="lede">The deck is holding one frame and the building is holding your place in it.
+         Close the tab if you want — nothing down there moves while the tape is stopped.</p>
+      <div class="readout">
+        <div><span class="k">Position</span><span class="v cy">00:08:41</span></div>
+        <div><span class="k">Segment</span><span class="v">Level 1</span></div>
+        <div><span class="k">Fuses</span><span class="v">1 / 3</span></div>
+        <div><span class="k">Tape</span><span class="v">1234</span></div>
+      </div>
+      <div class="mid-actions">
+        <button class="btn btn--key">&#9654; Play on</button>
+        <button class="btn">Stop and eject</button>
+      </div>
+      <p class="fine">Rewinding to zero wipes this descent and keeps your records</p>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== DEATH ====================== -->
+<div class="screen" id="s-death">
+  <div class="stage">
+    <div class="nosignal"></div>
+    <div class="snowband"></div>
+    <div class="tube-lines" style="opacity:.35"></div>
+    <div class="tube-vig"></div>
+    <div class="mid">
+      <div class="mid-osd" style="font-size:11px;color:#9fb4e8">Deck &middot; input 1</div>
+      <h2>No signal</h2>
+      <p class="lede">The tape kept running for eleven more seconds after the camera stopped being held.
+         There is nothing on those frames worth reading. The deck has fallen back to blue.</p>
+      <div class="readout">
+        <div><span class="k">Last frame</span><span class="v rd">00:14:57</span></div>
+        <div><span class="k">Segment</span><span class="v">Level 2</span></div>
+        <div><span class="k">Cause</span><span class="v">Contact</span></div>
+        <div><span class="k">Fuses</span><span class="v">1 / 3</span></div>
+      </div>
+      <div class="mid-actions">
+        <button class="btn btn--key">&#9654; New tape</button>
+        <button class="btn">Same tape, from zero</button>
+      </div>
+      <p class="fine">Every deck does this. It does not mean the tape is finished</p>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== ESCAPE ====================== -->
+<div class="screen" id="s-escape">
+  <div class="stage">
+    <!-- the picture: one frame, stacked so the deck can come apart on it -->
+    <div class="reel-glitch">
+      <div class="reel-cam">
+        <div class="reel-lay reel-lay--base"></div>
+        <div class="reel-lay reel-lay--smear"></div>
+        <div class="reel-lay reel-lay--r"></div>
+        <div class="reel-lay reel-lay--c"></div>
+        <div class="reel-tear reel-tear--a"></div>
+        <div class="reel-tear reel-tear--b"></div>
+      </div>
+    </div>
+
+    <div class="reel-roll"></div>
+    <div class="end-grade"></div>
+    <div class="tube-lines" style="opacity:.34"></div>
+    <div class="tube-grain"></div>
+    <div class="reel-snow"></div>
+    <div class="tube-drop"></div>
+    <div class="tube-head"></div>
+    <div class="tube-vig"></div>
+
+    <div class="reel-osd tl"><span class="recdot"></span>Rec<span class="play-glyph">&#9654;</span></div>
+    <div class="reel-osd tr">SP</div>
+    <div class="reel-osd bl">PM 7:28<br />May 16 1998</div>
+
+    <div class="out">
+      <p class="k">End of reel</p>
+      <h2>You got out</h2>
+      <p class="l">00:19:27 &middot; the tape does not say who</p>
+      <div class="out-a">
+        <button class="btn btn--key">&#9654; New tape</button>
+        <button class="btn">Rewind</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<nav class="devbar" aria-label="Preview screens">
+  <span class="tag">TAPE 1</span>
+  <button data-s="landing" aria-current="true">Landing</button>
+  <button data-s="hud">HUD</button>
+  <button data-s="pause">Pause</button>
+  <button data-s="death">Death</button>
+  <button data-s="escape">Escape</button>
+</nav>
+<script>
+  const bar = document.querySelector('.devbar');
+  bar.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-s]');
+    if (!b) return;
+    document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('is-on', s.id === 's-' + b.dataset.s));
+    bar.querySelectorAll('button').forEach((x) => x.setAttribute('aria-current', String(x === b)));
+    document.body.style.overflow = b.dataset.s === 'landing' ? '' : 'hidden';
+    scrollTo(0, 0);
+  });
+
+
+  /* ---------------------------------------------------------------------
+     DECK MENU. One cursor runs the whole screen: the row it rests on is the
+     panel you are reading and the segment the deck is playing behind it.
+     Moving it cuts the picture, and the deck drops a field on every cut. */
+  const landing = document.getElementById('s-landing');
+  const shots = [...landing.querySelectorAll('.tube-shot[data-seg]')];
+  const bleeds = [...landing.querySelectorAll('.bleed-r,.bleed-b')];
+  const marks = [...landing.querySelectorAll('.counter-mark')];
+  const ctFill = document.getElementById('ct-fill');
+  const ctNow = document.getElementById('ct-now');
+  const SEGS = [
+    ['00:00:00', 'Level 0', 0],   ['00:03:41', 'Level 1', 18.9],
+    ['00:07:02', 'Level 37', 36.2], ['00:10:55', 'Level 7', 56.1],
+    ['00:14:20', 'Level 2', 73.7],  ['00:17:48', 'Level !', 91.5],
+  ];
+
+  let cutTimer;
+  function cutTo(i) {
+    const shot = shots[i];
+    if (!shot || shot.classList.contains('is-on')) return;
+    shots.forEach((s) => s.classList.toggle('is-on', s === shot));
+    bleeds.forEach((b) => { b.src = shot.src; });
+    marks.forEach((m) => m.setAttribute('data-on', m.dataset.i === String(i) ? '1' : '0'));
+    ctFill.style.width = SEGS[i][2] + '%';
+    ctNow.textContent = `${SEGS[i][0]} · ${SEGS[i][1]}`;
+    landing.classList.add('is-cut');
+    clearTimeout(cutTimer);
+    cutTimer = setTimeout(() => landing.classList.remove('is-cut'), 90);
+  }
+  marks[0].setAttribute('data-on', '1');
+
+  /* the function list: a tablist whose selection follows the cursor */
+  const tabs = [...document.querySelectorAll('.mmrow')];
+  const select = (tab, focus) => {
+    tabs.forEach((t) => {
+      const on = t === tab;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+    });
+    if (focus) tab.focus();
+    cutTo(Number(tab.dataset.seg));
+    markScroll();
+  };
+  function markScroll() {
+    for (const p of document.querySelectorAll('.mm-panel')) {
+      if (p.hidden) continue;
+      const b = p.querySelector('.mm-body');
+      p.classList.toggle('can-scroll', b.scrollHeight - b.clientHeight > 8);
+    }
+  }
+  addEventListener('resize', markScroll, { passive: true });
+  document.querySelectorAll('.mm-body').forEach((b) =>
+    b.addEventListener('scroll', () => {
+      b.closest('.mm-panel').classList.toggle('can-scroll',
+        b.scrollHeight - b.scrollTop - b.clientHeight > 8);
+    }, { passive: true }));
+  markScroll();
+
+  tabs.forEach((t) => t.addEventListener('click', () => select(t, true)));
+  document.querySelector('.mm-list').addEventListener('keydown', (e) => {
+    const i = tabs.indexOf(document.activeElement);
+    if (i < 0) return;
+    const to = { ArrowDown: i + 1, ArrowRight: i + 1, ArrowUp: i - 1, ArrowLeft: i - 1,
+                 Home: 0, End: tabs.length - 1 }[e.key];
+    if (to === undefined) return;
+    e.preventDefault();
+    select(tabs[(to + tabs.length) % tabs.length], true);
+  });
+
+  /* the index rows drive the picture the same way the cursor does */
+  const ixs = [...document.querySelectorAll('.ix')];
+  ixs.forEach((b) => b.addEventListener('click', () => {
+    ixs.forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+    cutTo(Number(b.dataset.seg));
+  }));
+
+  /* END OF REEL — the deck is still playing, and still losing the picture
+     now and then. Irregular on purpose: a fixed interval reads as a loop. */
+  const esc = document.getElementById('s-escape');
+  (function dropout() {
+    setTimeout(() => {
+      if (esc.classList.contains('is-on')) {
+        const cls = Math.random() < 0.38 ? 'is-skew' : 'is-drop';
+        esc.classList.add(cls);
+        setTimeout(() => esc.classList.remove(cls), 55 + Math.random() * 135);
+      }
+      dropout();
+    }, 2400 + Math.random() * 7200);
+  })();
+
+  /* the deck clock keeps running whether or not anyone is watching */
+  const clock = document.getElementById('clock');
+  let f = 9, sec = 14;
+  setInterval(() => {
+    f = (f + 1) % 25;
+    if (f === 0) sec++;
+    clock.textContent = `00:${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}:${String(f).padStart(2, '0')}`;
+  }, 40);
+</script>
+</body>
+</html>
+

@@ -1,0 +1,13 @@
+/* Self-hosted latin subsets (Google Fonts, OFL). Dev preview only. */
+@font-face{font-family:"Courier Prime";font-style:normal;font-weight:400;font-display:swap;src:url(./courier-prime-400.woff2) format("woff2")}
+@font-face{font-family:"Courier Prime";font-style:normal;font-weight:700;font-display:swap;src:url(./courier-prime-700.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:400;font-display:swap;src:url(./ibm-plex-mono-400.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:500;font-display:swap;src:url(./ibm-plex-mono-500.woff2) format("woff2")}
+@font-face{font-family:"Permanent Marker";font-style:normal;font-weight:400;font-display:swap;src:url(./permanent-marker-400.woff2) format("woff2")}
+@font-face{font-family:"Rock Salt";font-style:normal;font-weight:400;font-display:swap;src:url(./rock-salt-400.woff2) format("woff2")}
+@font-face{font-family:"Saira Condensed";font-style:normal;font-weight:500;font-display:swap;src:url(./saira-condensed-500.woff2) format("woff2")}
+@font-face{font-family:"Saira Condensed";font-style:normal;font-weight:600;font-display:swap;src:url(./saira-condensed-600.woff2) format("woff2")}
+@font-face{font-family:"Saira Condensed";font-style:normal;font-weight:700;font-display:swap;src:url(./saira-condensed-700.woff2) format("woff2")}
+@font-face{font-family:"Share Tech Mono";font-style:normal;font-weight:400;font-display:swap;src:url(./share-tech-mono-400.woff2) format("woff2")}
+@font-face{font-family:"Special Elite";font-style:normal;font-weight:400;font-display:swap;src:url(./special-elite-400.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:100 700;font-display:swap;src:url(./ibm-plex-sans-var.woff2) format("woff2")}
