@@ -46,6 +46,32 @@ html, body {
   animation: menuFlicker 7s infinite;
 }
 
+.github-link {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 30;
+  display: none;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  color: #d8cfa8;
+  opacity: 0.42;
+  transition: color 0.18s ease, opacity 0.18s ease, filter 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body:has(.menu-screen:not(.hidden)) .github-link { display: flex; }
+.github-link:hover,
+.github-link:focus-visible {
+  color: #e8d989;
+  opacity: 0.88;
+  filter: drop-shadow(0 0 7px rgba(232, 217, 137, 0.45));
+}
+.github-link:focus-visible { outline: 1px solid rgba(232, 217, 137, 0.6); }
+.github-link svg { width: 20px; height: 20px; }
+
 @keyframes menuFlicker {
   0%, 93%, 100% { filter: brightness(1); }
   94% { filter: brightness(0.82); }

@@ -66,6 +66,9 @@
     .menu-btn.big{font-size:22px;padding:16px 54px;margin-top:8px}
     .menu-btn:disabled{opacity:.55;cursor:wait}
     .warn{font-size:12px;opacity:.5;letter-spacing:.2em}
+    .github-link{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));z-index:30;display:none;width:34px;height:34px;align-items:center;justify-content:center;color:#d8cfa8;opacity:.42}
+    .github-link svg{width:20px;height:20px}
+    body:has(.menu-screen:not(.hidden)) .github-link{display:flex}
   </style>
   <link rel="preload" href="/src/style.css" as="style" onload="this.onload=null;this.rel='stylesheet'" />
   <noscript><link rel="stylesheet" href="/src/style.css" /></noscript>
@@ -256,6 +259,19 @@
       <button id="btn-again" class="menu-btn">DESCEND AGAIN</button>
       <button id="btn-same-seed" class="menu-btn ghost">SAME SEED</button>
     </div>
+
+    <a
+      class="github-link"
+      href="https://github.com/martinezharo/backrooms"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="View source on GitHub"
+      title="View source on GitHub"
+    >
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true">
+        <path d="M12 .7A11.5 11.5 0 0 0 8.4 23c.6.1.8-.2.8-.5v-2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2A11 11 0 0 1 12 6c1 0 2 .1 2.9.4 2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.8 5.4-5.5 5.7.4.4.8 1.1.8 2.2v3.2c0 .3.2.6.8.5A11.5 11.5 0 0 0 12 .7Z"/>
+      </svg>
+    </a>
   </div>
 
   <noscript>
