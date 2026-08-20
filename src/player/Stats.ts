@@ -28,6 +28,7 @@ export class Stats {
     this.oxygen = 100;
     this.alive = true;
     this.dehydrationTime = 0;
+    this.wasUnder = false;
   }
 
   saveState(): StatsState {

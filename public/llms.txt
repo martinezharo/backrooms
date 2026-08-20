@@ -9,6 +9,6 @@ The Backrooms is a free, browser-based first-person survival horror game.
 
 ## About
 
-The maze is procedurally generated in the browser. Players explore four themed
+The maze is procedurally generated in the browser. Players descend through six
 levels, manage thirst and equipment, evade entities, find fuses and reach the
 exit portal. No download, account or media files are required.

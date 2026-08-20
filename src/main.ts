@@ -1,7 +1,7 @@
 import { DEV_HACKS } from './core/dev';
 import { formatTime } from './core/Records';
 import { loadSave } from './core/Save';
-import { BIOMES, DEPTHS } from './world/Biomes';
+import { defForDepth } from './world/Biomes';
 
 // An unfinished run remembers its own maze, so it also decides the seed —
 // unless the URL asks for a specific one, which always wins.
@@ -28,9 +28,9 @@ let loading = false;
 
 if (canContinue) {
   // The floor you're standing on says more about a run than the clock does.
-  const depth = Math.max(0, Math.min(DEPTHS.length - 1, save!.depth ?? 0));
+  const floor = defForDepth(save!.depth ?? 0).name;
   continueButton.textContent =
-    `CONTINUE — ${BIOMES[DEPTHS[depth]].name} · ${formatTime(save!.survivalTime)} IN`;
+    `CONTINUE — ${floor} · ${formatTime(save!.survivalTime)} IN`;
   continueButton.classList.remove('hidden');
   startButton.textContent = 'START OVER';
 }

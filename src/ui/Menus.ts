@@ -1,10 +1,9 @@
 // Start / pause / game-over / escape screens.
 
 import { formatTime, Records } from '../core/Records';
-import { DEPTHS, BIOMES } from '../world/Biomes';
+import { defForDepth } from '../world/Biomes';
 
-const levelName = (depth: number): string =>
-  BIOMES[DEPTHS[Math.max(0, Math.min(DEPTHS.length - 1, depth))]].name;
+const levelName = (depth: number): string => defForDepth(depth).name;
 
 export class Menus {
   private start = document.getElementById('start-screen')!;

@@ -30,7 +30,6 @@ export const DEHYDRATION_BASE = 0.6;     // health drain at thirst 0, accelerate
 // Bottles double as canteens
 export const BOTTLE_CAPACITY = 45;       // thirst points one full bottle holds
 export const BOTTLE_DRINK_RATE = 26;     // points/s while drinking from a bottle
-export const BOTTLE_FILL_RATE = 40;      // points/s poured in at a tap or in water
 
 // Lungs. One breath is a little over twenty seconds down, and about five
 // seconds at the surface to get it back — long enough that a dive has to be

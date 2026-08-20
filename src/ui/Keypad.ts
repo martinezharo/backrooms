@@ -21,19 +21,14 @@ export class Keypad {
 
   constructor() {
     for (let d = 1; d <= 9; d++) this.addKey(String(d));
-    this.addKey('⌫', () => {
-      this.entered = this.entered.slice(0, -1);
-      this.draw();
-      this.onKey?.(true);
-    });
+    this.addKey('⌫', () => this.rub());
     this.addKey('0');
     this.addKey('✕', () => this.hide());
     window.addEventListener('keydown', (e) => {
       if (!this.open) return;
       if (e.code === 'Escape') { this.hide(); e.preventDefault(); return; }
       if (e.code === 'Backspace') {
-        this.entered = this.entered.slice(0, -1);
-        this.draw();
+        this.rub();
         e.preventDefault();
         return;
       }
@@ -51,6 +46,14 @@ export class Keypad {
     b.textContent = label;
     b.addEventListener('click', () => (action ? action() : this.press(label)));
     this.keys.appendChild(b);
+  }
+
+  /** Rub out the last digit — the ⌫ key and Backspace do the same thing. */
+  private rub(): void {
+    if (this.locked || !this.entered) return;
+    this.entered = this.entered.slice(0, -1);
+    this.draw();
+    this.onKey?.(true);
   }
 
   private press(digit: string): void {
