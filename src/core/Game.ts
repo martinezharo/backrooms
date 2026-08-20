@@ -146,6 +146,7 @@ export class Game {
   private noiseHeat = 0;
   private readonly viewDirection = new THREE.Vector3();
   private readonly enemyOffset = new THREE.Vector3();
+  private readonly objectiveForward = new THREE.Vector3();
   private readonly telemetry: Telemetry;
 
   constructor(seed: number, trustedStart = false) {
@@ -1168,10 +1169,6 @@ export class Game {
       .filter((f) => this.pickups.isConsumed(`fuse:${f.cx},${f.cz}`)).length;
   }
 
-  private chunkCentre(cx: number, cz: number): THREE.Vector3 {
-    return new THREE.Vector3(cx * CHUNK + CHUNK / 2, 0, cz * CHUNK + CHUNK / 2);
-  }
-
   /**
    * Feeds the tracker: which way the receiver is pointing and how far off the
    * target is. The bearing is relative to where the player is looking, so the
@@ -1194,11 +1191,11 @@ export class Game {
       target = this.descentTarget();
     } else if (onExit) {
       target = this.portals.portal?.center.clone()
-        ?? this.chunkCentre(layout.exit.cx, layout.exit.cz);
+        ?? chunkCentre(layout.exit.cx, layout.exit.cz);
     } else {
       let best = Infinity;
       for (const f of remaining) {
-        const c = this.chunkCentre(f.cx, f.cz);
+        const c = chunkCentre(f.cx, f.cz);
         const d = Math.hypot(c.x - p.x, c.z - p.z);
         if (d < best) { best = d; target = c; }
       }
@@ -1210,7 +1207,7 @@ export class Game {
       const dx = target.x - p.x;
       const dz = target.z - p.z;
       distance = Math.hypot(dx, dz);
-      const fwd = new THREE.Vector3();
+      const fwd = this.objectiveForward;
       this.player.camera.getWorldDirection(fwd);
       // right-hand vector of the view, flattened: (-fz, fx)
       bearing = Math.atan2(dx * -fwd.z + dz * fwd.x, dx * fwd.x + dz * fwd.z);
