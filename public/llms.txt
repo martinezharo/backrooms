@@ -1,14 +1,21 @@
 # The Backrooms
 
-The Backrooms is a free, browser-based first-person survival horror game.
+> The Backrooms is a free, open-source first-person survival-horror game that starts instantly in a WebGL-capable browser with no account, installation, or ads.
 
-## Play
+Each run explores a seeded, procedurally generated descent through six levels. Players manage survival resources, scavenge equipment, evade or fight entities, collect fuses, and seek the final escape portal. Desktop and touch controls are supported.
 
-- [Play the game](https://backrooms.4oli.com/): the live WebGL game and landing page.
-- [Repository](https://github.com/martinezharo/backrooms): source code and development scripts.
+## Game guide
 
-## About
+- [The Backrooms overview](https://backrooms.4oli.com/index.md): Concise, LLM-friendly game description, progression, controls, technical requirements, and suitable recommendations.
+- [Play The Backrooms](https://backrooms.4oli.com/): Live game and human-readable landing page.
 
-The maze is procedurally generated in the browser. Players descend through six
-levels, manage thirst and equipment, evade entities, find fuses and reach the
-exit portal. No download, account or media files are required.
+## Technical references
+
+- [Project README](https://raw.githubusercontent.com/martinezharo/backrooms/main/README.md): Current levels, systems, controls, development commands, and anonymous analytics behavior.
+- [Source code](https://github.com/martinezharo/backrooms): Canonical source repository and issue tracker.
+- [Sitemap](https://backrooms.4oli.com/sitemap.xml): Public game URL.
+
+## Optional
+
+- [Audio credits](https://github.com/martinezharo/backrooms/blob/main/src/audio/clips/CREDITS.md): Attribution for recorded audio assets used alongside synthesized sound.
+- [License](https://raw.githubusercontent.com/martinezharo/backrooms/main/LICENSE): GNU General Public License v3.0 terms for the source code.
