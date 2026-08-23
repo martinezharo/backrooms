@@ -1,7 +1,12 @@
 import { DEV_HACKS } from './core/dev';
 import { formatTime } from './core/Records';
 import { loadSave } from './core/Save';
+import { watchForTouch } from './ui/controls';
 import { defForDepth } from './world/Biomes';
+
+// Before the first pixel: the landing page has to describe thumbs to a phone
+// and WASD to a desktop, and the game is not built until you press play.
+watchForTouch();
 
 // An unfinished run remembers its own maze, so it also decides the seed —
 // unless the URL asks for a specific one, which always wins.

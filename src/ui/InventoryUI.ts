@@ -5,9 +5,9 @@ import { BOTTLE_CAPACITY, INV_COLS, INV_ROWS, MAX_CARRY_WEIGHT } from '../core/c
 import { buildItemMesh } from '../items/ItemMeshes';
 import { Inventory } from '../items/Inventory';
 import { ItemInstance } from '../items/Items';
+import { usingTouch } from './controls';
 import { itemIcon } from './icons';
 
-const CELL_PX = 74;
 const GAP_PX = 4;
 
 export class InventoryUI {
@@ -22,6 +22,10 @@ export class InventoryUI {
   private weight = document.getElementById('inventory-weight')!;
   private inspectCanvas = document.getElementById('inspect-canvas') as HTMLCanvasElement;
   private inspectLabel = document.getElementById('inspect-label')!;
+  private actions = document.getElementById('inventory-actions')!;
+  private actionDrop = document.getElementById('inventory-action-drop')!;
+  /** touch only: the tile the thumb last landed on, kept across re-renders */
+  private selected: ItemInstance | null = null;
 
   // drag-an-item-out-of-the-bag-to-drop-it state
   private dragItem: ItemInstance | null = null;
@@ -44,6 +48,14 @@ export class InventoryUI {
     inventory.onChanged = () => { if (this.open) this.render(); };
     document.addEventListener('mousemove', (e) => this.onDragMove(e));
     document.addEventListener('mouseup', (e) => this.onDragEnd(e));
+    // A finger cannot drag an item out of the bag onto the floor the way a
+    // mouse can, so the selected tile grows a button that does it instead.
+    this.actionDrop.addEventListener('click', () => {
+      const item = this.selected;
+      if (!item) return;
+      this.select(null);
+      this.onDrop?.(item);
+    });
   }
 
   toggle(): boolean {
@@ -58,12 +70,34 @@ export class InventoryUI {
       this.render();
     } else {
       this.cancelDrag();
+      this.select(null);
       this.stopInspect();
     }
   }
 
+  /** Touch: one tile at a time is "in your hands" for inspecting and dropping. */
+  private select(item: ItemInstance | null): void {
+    const stillThere = item && this.inventory.items.some((p) => p.item === item);
+    this.selected = stillThere ? item : null;
+    this.actions.classList.toggle('hidden', !this.selected);
+    if (this.selected) {
+      this.inspect(this.selected);
+    } else {
+      this.stopInspect();
+    }
+    for (const el of this.grid.querySelectorAll('.inv-item')) el.classList.remove('selected');
+    if (this.selected) {
+      const i = this.inventory.items.findIndex((p) => p.item === this.selected);
+      this.grid.querySelectorAll('.inv-item')[i]?.classList.add('selected');
+    }
+  }
+
   private render(): void {
-    this.stopInspect();
+    const touch = usingTouch();
+    // the tile size is a CSS decision — a small screen shrinks the grid rather
+    // than scaling the whole panel down into unreadability
+    const cellPx = parseFloat(getComputedStyle(this.grid).getPropertyValue('--inv-cell')) || 74;
+    if (!touch) this.stopInspect();
     this.grid.innerHTML = '';
     // background cells
     for (let i = 0; i < INV_COLS * INV_ROWS; i++) {
@@ -78,10 +112,10 @@ export class InventoryUI {
       const el = document.createElement('div');
       el.className = 'inv-item' + (this.inventory.equipped === item ? ' equipped' : '');
       el.style.position = 'absolute';
-      el.style.left = `${col * (CELL_PX + GAP_PX)}px`;
-      el.style.top = `${row * (CELL_PX + GAP_PX)}px`;
-      el.style.width = `${item.def.gridW * CELL_PX + (item.def.gridW - 1) * GAP_PX}px`;
-      el.style.height = `${item.def.gridH * CELL_PX + (item.def.gridH - 1) * GAP_PX}px`;
+      el.style.left = `${col * (cellPx + GAP_PX)}px`;
+      el.style.top = `${row * (cellPx + GAP_PX)}px`;
+      el.style.width = `${item.def.gridW * cellPx + (item.def.gridW - 1) * GAP_PX}px`;
+      el.style.height = `${item.def.gridH * cellPx + (item.def.gridH - 1) * GAP_PX}px`;
 
       const icon = document.createElement('div');
       icon.className = 'item-icon';
@@ -89,6 +123,7 @@ export class InventoryUI {
       el.appendChild(icon);
 
       const label = document.createElement('div');
+      label.className = 'item-name';
       label.textContent = item.def.id === 'pistol' ? `${item.def.name} (${item.ammo})`
         : item.def.id === 'bottle'
           ? `${item.def.name} (${item.water > 0 ? `${Math.round((item.water / BOTTLE_CAPACITY) * 100)}%` : 'EMPTY'})`
@@ -104,35 +139,45 @@ export class InventoryUI {
         el.appendChild(bar);
       }
 
-      el.addEventListener('mousedown', (e) => {
-        if (e.button !== 0) return;
-        this.suppressClick = false;
-        this.dragItem = item;
-        this.dragSourceEl = el;
-        this.dragStartX = e.clientX;
-        this.dragStartY = e.clientY;
-        this.dragActive = false;
-      });
-      el.addEventListener('click', () => {
-        if (this.suppressClick) {
+      if (touch) {
+        // a tap both equips and picks the tile up for a closer look, so the
+        // fast thing stays one tap and the rest is one button away
+        el.addEventListener('click', () => {
+          this.inventory.equip(item);
+          this.select(item);
+        });
+      } else {
+        el.addEventListener('mousedown', (e) => {
+          if (e.button !== 0) return;
           this.suppressClick = false;
-          return;
-        }
-        this.inventory.equip(item);
-      });
-      el.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this.onDrop?.(item);
-      });
-      el.addEventListener('mouseenter', () => this.inspect(item));
-      el.addEventListener('mouseleave', () => this.stopInspect());
+          this.dragItem = item;
+          this.dragSourceEl = el;
+          this.dragStartX = e.clientX;
+          this.dragStartY = e.clientY;
+          this.dragActive = false;
+        });
+        el.addEventListener('click', () => {
+          if (this.suppressClick) {
+            this.suppressClick = false;
+            return;
+          }
+          this.inventory.equip(item);
+        });
+        el.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.onDrop?.(item);
+        });
+        el.addEventListener('mouseenter', () => this.inspect(item));
+        el.addEventListener('mouseleave', () => this.stopInspect());
+      }
       this.grid.appendChild(el);
     }
 
     const w = this.inventory.totalWeight();
     this.weight.textContent = `WEIGHT ${w} / ${MAX_CARRY_WEIGHT}`;
     this.weight.classList.toggle('full', w >= MAX_CARRY_WEIGHT);
+    if (touch) this.select(this.selected);
   }
 
   // -------------------------------------------- drag out of the bag = drop

@@ -4,6 +4,8 @@
 // else on the floor. It submits on the fourth key so there is nothing to
 // press afterwards — the door either opens or it tells you no.
 
+import { ctrl } from './controls';
+
 export class Keypad {
   /** Return true to accept the code; false makes the pad refuse it out loud. */
   onSubmit: ((code: string) => boolean) | null = null;
@@ -16,6 +18,7 @@ export class Keypad {
   private screen = document.getElementById('keypad-screen')!;
   private readout = document.getElementById('keypad-readout')!;
   private keys = document.getElementById('keypad-keys')!;
+  private hint = document.getElementById('keypad-hint')!;
   private entered = '';
   private locked = false;
 
@@ -88,6 +91,10 @@ export class Keypad {
   }
 
   show(): void {
+    // written here rather than in the markup: on a phone there is no ESC, and
+    // the way out is the ✕ on the pad itself
+    this.hint.textContent =
+      `someone wrote it on a wall down here · ${ctrl('back')} to step back`;
     this.entered = '';
     this.locked = false;
     this.draw();

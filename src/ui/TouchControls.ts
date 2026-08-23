@@ -2,20 +2,34 @@
 // you put your left thumb, a look pad on the right, and buttons that stand in
 // for the keys. Everything feeds the same Input the keyboard writes to, so no
 // system below this file knows the difference.
+//
+// Two rules shape the layout. Nothing is on screen that you cannot use right
+// now — the torch button only exists once you own a torch — and every button
+// says what it will do to the thing in your hand, not which key it replaces.
 
 import { Input } from '../core/Input';
+import { setTouchControls, usingTouch } from './controls';
+import { controlIcon } from './icons';
 
 /** pixels from the stick centre to full tilt */
 const STICK_RADIUS = 58;
 /** dead centre, as a fraction of the radius — stops thumb jitter walking you */
 const DEADZONE = 0.14;
+/** past this much tilt the thumb is at the rim, and the rim means run */
+const RUN_TILT = 0.85;
 /** touch drags cover less screen than a mouse does, so they count for more */
 const LOOK_SCALE = 2.4;
+/** how long a thumb has to sit still on the look pad to mean something else */
+const LONG_PRESS_MS = 600;
+/** and how far it may wander first before it is just a look, not a press */
+const LONG_PRESS_SLOP = 14;
 
 interface Spec {
   /** doubles as the grid-area name in the action cluster */
   id: string;
   label: string;
+  /** icon key; with one set the button draws the glyph over the caption */
+  icon?: string;
   /** key code held down while the button is held */
   hold?: string;
   /** key code latched on and off by successive taps */
@@ -27,7 +41,6 @@ interface Spec {
 
 /** Thumb cluster, bottom right. Laid out by grid-area = spec id. */
 const ACTIONS: Spec[] = [
-  { id: 'run', label: 'RUN', toggle: 'ShiftLeft', cls: 'small' },
   { id: 'crouch', label: 'CROUCH', toggle: 'KeyC', cls: 'small' },
   { id: 'jump', label: 'JUMP', hold: 'Space' },
   { id: 'use', label: 'USE', hold: 'KeyE' },
@@ -35,21 +48,38 @@ const ACTIONS: Spec[] = [
   { id: 'attack', label: 'HIT', button: 0, cls: 'big' },
 ];
 
-/** Utility row along the top edge. */
+/** Utility row along the top edge. Icons, because they never change. */
 const TOOLS: Spec[] = [
-  { id: 'bag', label: 'BAG', hold: 'Tab', cls: 'small' },
-  { id: 'torch', label: 'TORCH', hold: 'KeyF', cls: 'small' },
-  { id: 'receiver', label: 'RCVR', hold: 'KeyR', cls: 'small' },
-  { id: 'drop', label: 'DROP', hold: 'KeyG', cls: 'small' },
-  { id: 'hug', label: 'H', hold: 'KeyH', cls: 'small' },
+  { id: 'bag', label: 'BAG', icon: 'bag', hold: 'Tab', cls: 'small' },
+  { id: 'torch', label: 'TORCH', icon: 'torch', hold: 'KeyF', cls: 'small' },
+  { id: 'receiver', label: 'DOOR', icon: 'signal', hold: 'KeyR', cls: 'small' },
+  { id: 'drop', label: 'DROP', icon: 'drop', hold: 'KeyG', cls: 'small' },
 ];
 
-/** Coarse pointer with no hover = a finger. `?touch=1` / `?touch=0` overrides. */
-function wantsTouch(): boolean {
-  const forced = new URLSearchParams(location.search).get('touch');
-  if (forced !== null) return forced !== '0';
-  return matchMedia('(hover: none) and (pointer: coarse)').matches;
+/**
+ * What the rig should be showing this frame. The game recomputes it every
+ * frame; only the differences reach the DOM.
+ */
+export interface TouchContext {
+  /** verb for the primary button — what the thing in your hand does */
+  attack: string;
+  /** verb for the secondary button, or null when the held item has none */
+  secondary: string | null;
+  /** something is in reach: the USE button lights up instead of sitting dead */
+  usable: boolean;
+  /** true = torch on, false = off, null = you don't have one */
+  torch: boolean | null;
+  /** what re-aiming the receiver would point you at, or null where a tap on it
+   *  would change nothing */
+  receiver: string | null;
+  /** you are holding something that can be put down */
+  drop: boolean;
 }
+
+const IDLE_CONTEXT: TouchContext = {
+  attack: 'HIT', secondary: 'BLOCK', usable: false,
+  torch: null, receiver: null, drop: false,
+};
 
 export class TouchControls {
   private input: Input;
@@ -63,19 +93,25 @@ export class TouchControls {
 
   private enabled = false;
   private active = false;
-  private buttons: { el: HTMLElement; spec: Spec }[] = [];
+  private buttons = new Map<string, { el: HTMLElement; spec: Spec }>();
+  private context: TouchContext = { ...IDLE_CONTEXT };
 
   private stickPointer: number | null = null;
   private stickX = 0;
   private stickY = 0;
+  private running = false;
   private lookPointer: number | null = null;
   private lookX = 0;
   private lookY = 0;
+  /** when the current look touch went down, and whether it has gone anywhere */
+  private lookDownAt = 0;
+  private lookTravelled = false;
 
   constructor(input: Input) {
     this.input = input;
-    if (wantsTouch()) this.enable();
-    // a touchscreen the media query talked us out of still gets the controls
+    // main.ts has already made the call for the landing page; this only picks
+    // it up, or waits for the first finger if it was a near miss
+    if (usingTouch()) this.enable();
     else window.addEventListener('touchstart', () => this.enable(), { once: true, passive: true });
   }
 
@@ -95,6 +131,33 @@ export class TouchControls {
     if (open) this.resetStick();
   }
 
+  /**
+   * Re-label and re-hide the buttons for what you are carrying and standing
+   * next to. Cheap to call every frame: nothing is written unless it changed.
+   */
+  setContext(next: TouchContext): void {
+    if (!this.enabled) return;
+    const cur = this.context;
+    if (next.attack !== cur.attack) this.setLabel('attack', next.attack);
+    if (next.secondary !== cur.secondary) {
+      this.show('block', next.secondary !== null);
+      if (next.secondary) this.setLabel('block', next.secondary);
+    }
+    if (next.usable !== cur.usable) {
+      this.buttons.get('use')?.el.classList.toggle('live', next.usable);
+    }
+    if (next.torch !== cur.torch) {
+      this.show('torch', next.torch !== null);
+      this.buttons.get('torch')?.el.classList.toggle('on', next.torch === true);
+    }
+    if (next.receiver !== cur.receiver) {
+      this.show('receiver', next.receiver !== null);
+      if (next.receiver) this.setLabel('receiver', next.receiver);
+    }
+    if (next.drop !== cur.drop) this.show('drop', next.drop);
+    this.context = { ...next };
+  }
+
   /** Phones play better full screen and sideways. Both are best-effort. */
   goImmersive(): void {
     if (!this.enabled || document.fullscreenElement) return;
@@ -111,7 +174,7 @@ export class TouchControls {
     if (this.enabled) return;
     this.enabled = true;
     this.input.touchMode = true;
-    document.body.classList.add('touch');
+    setTouchControls(true);
     this.build();
     this.wireStick();
     this.wireLook();
@@ -124,8 +187,11 @@ export class TouchControls {
     for (const spec of ACTIONS) this.addButton(this.actions, spec).style.gridArea = spec.id;
     for (const spec of TOOLS) this.addButton(this.tools, spec);
     this.addButton(document.getElementById('touch-pause')!, {
-      id: 'pause', label: 'II', hold: 'Escape', cls: 'small',
+      id: 'pause', label: 'PAUSE', icon: 'pause', hold: 'Escape', cls: 'small',
     });
+    // everything context-driven starts out of the way; the first frame of play
+    // brings back whatever you actually have
+    for (const id of ['torch', 'receiver', 'drop']) this.show(id, false);
   }
 
   private addButton(parent: HTMLElement, spec: Spec): HTMLElement {
@@ -133,7 +199,8 @@ export class TouchControls {
     el.type = 'button';
     el.className = `touch-btn ${spec.cls ?? ''}`.trim();
     el.id = `touch-btn-${spec.id}`;
-    el.textContent = spec.label;
+    el.setAttribute('aria-label', spec.label);
+    this.paint(el, spec, spec.label);
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       el.setPointerCapture(e.pointerId);
@@ -144,8 +211,30 @@ export class TouchControls {
     el.addEventListener('pointercancel', release);
     el.addEventListener('contextmenu', (e) => e.preventDefault());
     parent.appendChild(el);
-    this.buttons.push({ el, spec });
+    this.buttons.set(spec.id, { el, spec });
     return el;
+  }
+
+  /** Glyph over caption for the tools, plain caption for the thumb cluster. */
+  private paint(el: HTMLElement, spec: Spec, label: string): void {
+    el.innerHTML = spec.icon
+      ? `<span class="touch-glyph">${controlIcon(spec.icon)}</span><span class="touch-cap">${label}</span>`
+      : `<span class="touch-cap">${label}</span>`;
+  }
+
+  private setLabel(id: string, label: string): void {
+    const found = this.buttons.get(id);
+    if (!found) return;
+    found.el.setAttribute('aria-label', label);
+    this.paint(found.el, found.spec, label);
+  }
+
+  private show(id: string, visible: boolean): void {
+    const found = this.buttons.get(id);
+    if (!found) return;
+    found.el.classList.toggle('gone', !visible);
+    // a button that disappears mid-press would leave its key stuck down
+    if (!visible) this.releaseButton(found.el, found.spec, true);
   }
 
   private pressButton(el: HTMLElement, spec: Spec): void {
@@ -160,16 +249,22 @@ export class TouchControls {
     if (spec.button !== undefined) this.input.setVirtualButton(spec.button, true);
   }
 
-  private releaseButton(el: HTMLElement, spec: Spec): void {
-    if (spec.toggle) return; // latched until the next tap
+  private releaseButton(el: HTMLElement, spec: Spec, force = false): void {
+    if (spec.toggle) {
+      if (!force) return; // latched until the next tap
+      el.classList.remove('on');
+      this.input.setVirtualKey(spec.toggle, false);
+      return;
+    }
     el.classList.remove('held');
     if (spec.hold) this.input.setVirtualKey(spec.hold, false);
     if (spec.button !== undefined) this.input.setVirtualButton(spec.button, false);
   }
 
   private releaseAll(): void {
-    for (const { el } of this.buttons) el.classList.remove('held', 'on');
+    for (const { el } of this.buttons.values()) el.classList.remove('held', 'on');
     this.input.releaseVirtual();
+    this.lookTravelled = true; // whatever was mid-press does not survive this
     this.resetStick();
   }
 
@@ -223,12 +318,23 @@ export class TouchControls {
     }
     this.input.moveX = ax;
     this.input.moveY = ay;
+    // shoving the thumb out to the rim is the sprint: one fewer button, and
+    // it is the same gesture every phone game already taught you
+    this.setRunning(tilt >= RUN_TILT);
+  }
+
+  private setRunning(on: boolean): void {
+    if (on === this.running) return;
+    this.running = on;
+    this.input.setVirtualKey('ShiftLeft', on);
+    this.stick.classList.toggle('running', on);
   }
 
   private resetStick(): void {
     this.stickPointer = null;
     this.input.moveX = 0;
     this.input.moveY = 0;
+    this.setRunning(false);
     this.knob.style.transform = 'translate(0px, 0px)';
     this.stick.classList.remove('active');
     // park it back at the resting spot as a hint of where the stick lives
@@ -239,6 +345,8 @@ export class TouchControls {
   // -------------------------------------------------------------- look
 
   private wireLook(): void {
+    let downX = 0;
+    let downY = 0;
     this.lookZone.addEventListener('pointerdown', (e) => {
       if (this.lookPointer !== null) return;
       e.preventDefault();
@@ -246,18 +354,43 @@ export class TouchControls {
       this.lookZone.setPointerCapture(e.pointerId);
       this.lookX = e.clientX;
       this.lookY = e.clientY;
+      downX = e.clientX;
+      downY = e.clientY;
+      this.lookDownAt = performance.now();
+      this.lookTravelled = false;
     });
     this.lookZone.addEventListener('pointermove', (e) => {
       if (e.pointerId !== this.lookPointer) return;
       this.input.addLook((e.clientX - this.lookX) * LOOK_SCALE, (e.clientY - this.lookY) * LOOK_SCALE);
       this.lookX = e.clientX;
       this.lookY = e.clientY;
+      // a thumb that is going somewhere is looking around, not holding still
+      if (Math.hypot(e.clientX - downX, e.clientY - downY) > LONG_PRESS_SLOP) this.lookTravelled = true;
     });
-    const end = (e: PointerEvent) => {
+    const end = (e: PointerEvent, lifted: boolean) => {
       if (e.pointerId !== this.lookPointer) return;
       this.lookPointer = null;
+      if (lifted) this.finishLookPress();
     };
-    this.lookZone.addEventListener('pointerup', end);
-    this.lookZone.addEventListener('pointercancel', end);
+    this.lookZone.addEventListener('pointerup', (e) => end(e, true));
+    this.lookZone.addEventListener('pointercancel', (e) => end(e, false));
+  }
+
+  /**
+   * The hug is an easter egg, and an egg with a button on it is a feature. On
+   * a keyboard it is an unmarked key; here it is holding still and staring at
+   * whatever is standing over you — which does nothing at all unless there is
+   * something within arm's reach, so nobody finds it by fumbling.
+   *
+   * The verdict is passed when the thumb lifts rather than on a timer: a
+   * struggling frame rate delivers pointer moves in clumps, and a timer cannot
+   * tell a slow drag from a still thumb until the moves have arrived.
+   */
+  private finishLookPress(): void {
+    if (this.lookTravelled || performance.now() - this.lookDownAt < LONG_PRESS_MS) return;
+    this.input.setVirtualKey('KeyH', true);
+    // long enough for the simulation to see the press edge, short enough that
+    // it can never be mistaken for a key left down
+    window.setTimeout(() => this.input.setVirtualKey('KeyH', false), 140);
   }
 }

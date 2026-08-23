@@ -416,8 +416,8 @@ body:has(.menu-screen:not(.hidden)) .github-link { display: flex; }
 
 #inventory-grid {
   display: grid;
-  grid-template-columns: repeat(5, 74px);
-  grid-template-rows: repeat(4, 74px);
+  grid-template-columns: repeat(5, var(--inv-cell));
+  grid-template-rows: repeat(4, var(--inv-cell));
   gap: 4px;
 }
 
@@ -499,6 +499,10 @@ body:has(.menu-screen:not(.hidden)) .github-link { display: flex; }
   color: #e8d989;
 }
 
+/* whatever the tile cannot hold is the tile's problem, not its neighbour's */
+.inv-item { overflow: hidden; }
+.inv-item .item-name { max-width: 100%; }
+
 .inv-item.dragging { opacity: 0.35; }
 
 .inv-drag-ghost {
@@ -542,6 +546,10 @@ body:has(.menu-screen:not(.hidden)) .github-link { display: flex; }
 }
 
 /* ---------- Objective tracker ---------- */
+/* With a mouse these two live in opposite corners, so the wrapper around them
+   has to not exist. On touch it becomes the column that keeps them apart. */
+#hud-left { display: contents; }
+
 #objective {
   position: absolute;
   left: 26px; top: 44px;
@@ -624,6 +632,9 @@ body:has(.menu-screen:not(.hidden)) .github-link { display: flex; }
 }
 
 /* ---------- Touch controls ---------- */
+/* One rule runs this layer: the thumbs own the bottom corners, and nothing
+   that cannot be used right now takes up any of the room. Every button says
+   what it does to the thing in your hand — never which key it stands in for. */
 .touch-only { display: none; }
 body.touch .touch-only { display: block; }
 body.touch .mouse-only { display: none; }
@@ -634,34 +645,58 @@ body.touch .mouse-only { display: none; }
   z-index: 16;
   pointer-events: none;
   touch-action: none;
+  /* notches and home bars eat the corners the thumbs want */
+  --edge-l: calc(14px + env(safe-area-inset-left, 0px));
+  --edge-r: calc(14px + env(safe-area-inset-right, 0px));
+  --edge-t: calc(10px + env(safe-area-inset-top, 0px));
+  --edge-b: calc(14px + env(safe-area-inset-bottom, 0px));
+  /* one place decides how big a thumb target is; the cluster columns are
+     sized from the same numbers so a button that comes and goes never shoves
+     the others sideways */
+  --btn: 68px;
+  --btn-big: 94px;
+  --btn-small: 52px;
 }
 
-/* the two halves of the screen the thumbs live on */
-#touch-move-zone, #touch-look-zone {
+/* Looking is the whole screen. Walking is the corner the left thumb can
+   actually reach, laid over the top of it where the two meet. */
+#touch-look-zone {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  inset: 0;
+  z-index: 1;
   pointer-events: auto;
   touch-action: none;
 }
-#touch-move-zone { left: 0; width: 42%; }
-#touch-look-zone { right: 0; width: 58%; }
+#touch-move-zone {
+  position: absolute;
+  left: 0; bottom: 0;
+  width: 46%; height: 100%;
+  z-index: 2;
+  pointer-events: auto;
+  touch-action: none;
+}
 
 #touch-stick {
   position: absolute;
-  left: 104px;
-  top: calc(100% - 166px);
+  left: calc(var(--edge-l) + 72px);
+  top: calc(100% - var(--edge-b) - 92px);
   width: 128px;
   height: 128px;
   margin: -64px 0 0 -64px;
   border-radius: 50%;
   border: 1px solid rgba(232, 217, 137, 0.25);
   background: radial-gradient(circle, rgba(232, 217, 137, 0.07), rgba(0, 0, 0, 0.3));
-  opacity: 0.4;
-  transition: opacity 0.18s ease;
+  opacity: 0.34;
+  transition: opacity 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
   pointer-events: none;
+  z-index: 3;
 }
 #touch-stick.active { opacity: 1; }
+/* the rim is the sprint: it lights up so you can feel where the edge is */
+#touch-stick.running {
+  border-color: rgba(232, 217, 137, 0.85);
+  box-shadow: 0 0 22px rgba(232, 217, 137, 0.3), inset 0 0 26px rgba(232, 217, 137, 0.12);
+}
 
 #touch-stick-knob {
   position: absolute;
@@ -675,130 +710,291 @@ body.touch .mouse-only { display: none; }
   background: rgba(232, 217, 137, 0.16);
   box-shadow: 0 0 14px rgba(232, 217, 137, 0.25);
 }
+#touch-stick.running #touch-stick-knob {
+  border-color: #e8d989;
+  background: rgba(232, 217, 137, 0.3);
+}
 
 .touch-btn {
   pointer-events: auto;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
   font-family: inherit;
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  width: 62px;
-  height: 62px;
+  width: var(--btn);
+  height: var(--btn);
+  padding: 0;
   border-radius: 50%;
-  border: 1px solid rgba(232, 217, 137, 0.35);
-  background: rgba(10, 9, 3, 0.45);
+  border: 1px solid rgba(232, 217, 137, 0.32);
+  background: rgba(10, 9, 3, 0.5);
   color: #e8d989;
-  text-shadow: 0 0 6px rgba(0, 0, 0, 1);
+  backdrop-filter: blur(2px);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 2px;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
 }
-.touch-btn.big { width: 88px; height: 88px; font-size: 14px; }
-.touch-btn.small { width: 44px; height: 44px; font-size: 9px; }
+.touch-btn.big { width: var(--btn-big); height: var(--btn-big); }
+.touch-btn.small { width: var(--btn-small); height: var(--btn-small); }
+/* context decides these exist at all — no dead buttons on a small screen */
+.touch-btn.gone { display: none; }
+
+.touch-cap {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 1);
+}
+.touch-btn.big .touch-cap { font-size: 14px; letter-spacing: 0.14em; }
+.touch-btn.small .touch-cap { font-size: 8px; letter-spacing: 0.06em; opacity: 0.8; }
+.touch-glyph { display: flex; filter: drop-shadow(0 0 5px rgba(0, 0, 0, 1)); }
+.touch-glyph svg { width: 19px; height: 19px; }
+
 .touch-btn.held, .touch-btn.on {
   background: rgba(232, 217, 137, 0.22);
   box-shadow: 0 0 16px rgba(232, 217, 137, 0.35);
 }
+.touch-btn.on { border-color: rgba(232, 217, 137, 0.8); }
+/* USE is the only button whose answer depends on where you're standing, so it
+   is also the only one that lights up before you press it */
+#touch-btn-use.live {
+  border-color: #e8d989;
+  color: #fff6c8;
+  box-shadow: 0 0 18px rgba(232, 217, 137, 0.45), inset 0 0 14px rgba(232, 217, 137, 0.16);
+  animation: usePulse 1.6s ease-in-out infinite;
+}
+@keyframes usePulse { 0%, 100% { opacity: 0.9; } 50% { opacity: 1; } }
 
 #touch-actions {
   position: absolute;
-  right: 16px;
-  bottom: 18px;
+  right: var(--edge-r);
+  bottom: var(--edge-b);
+  z-index: 4;
   display: grid;
   gap: 10px;
   align-items: center;
   justify-items: center;
+  grid-template-columns: var(--btn) var(--btn) var(--btn-big);
   grid-template-areas:
-    "run    crouch jump"
+    ".      crouch jump"
     "use    block  attack";
 }
 
+/* icons, top right, next to the pause button — they never change meaning */
 #touch-tools {
   position: absolute;
-  top: 10px;
-  right: 64px;
+  top: var(--edge-t);
+  right: calc(var(--edge-r) + var(--btn-small) + 8px);
+  z-index: 4;
   display: flex;
+  flex-direction: row-reverse;
   gap: 8px;
 }
 
-#touch-pause { position: absolute; top: 10px; right: 10px; }
+#touch-pause { position: absolute; top: var(--edge-t); right: var(--edge-r); z-index: 4; }
 
-/* the bag overlay owns the screen: leave only the row that can close it */
+/* the bag overlay owns the screen: leave only the two buttons that get you
+   back out of it, so nothing sits on top of the panel */
 #touch-controls.bag-open #touch-move-zone,
 #touch-controls.bag-open #touch-look-zone,
 #touch-controls.bag-open #touch-stick,
-#touch-controls.bag-open #touch-actions { display: none; }
+#touch-controls.bag-open #touch-actions,
+#touch-controls.bag-open #touch-tools .touch-btn:not(#touch-btn-bag) { display: none; }
 
 /* ---------- HUD, rearranged around the thumbs ---------- */
 /* over the controls, so hotbar slots win the taps; the bag replaces it whole */
 body.touch #hud { z-index: 17; }
 body.touch.bag-open #hud { display: none; }
+/* no corner to spare, and a phone can read its own frame rate elsewhere */
+body.touch #fps-counter { display: none; }
 
-body.touch #biome-label { left: 10px; top: 8px; font-size: 10px; letter-spacing: 0.25em; }
-body.touch #objective { left: 10px; top: 26px; width: 158px; padding: 6px 9px 7px; }
-body.touch #objective-title { font-size: 10px; }
-body.touch #stats-bars { left: 10px; top: 104px; bottom: auto; width: 150px; }
-body.touch #fps-counter { right: auto; left: 50%; transform: translateX(-50%); }
-body.touch #interact-prompt { top: 52%; font-size: 12px; }
+body.touch #biome-label { left: var(--edge-l, 12px); top: 8px; font-size: 10px; letter-spacing: 0.25em; }
+/* One stack, so a three-line objective pushes the bars down instead of
+   printing itself over them. */
+body.touch #hud-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  position: absolute;
+  left: 12px;
+  top: 24px;
+  width: 150px;
+  gap: 9px;
+}
+body.touch #objective,
+body.touch #stats-bars {
+  position: static;
+  width: 100%;
+  bottom: auto;
+}
+body.touch #objective {
+  order: -1; /* the objective leads, the bars follow it down */
+  padding: 5px 8px 6px;
+}
+body.touch #objective-title { font-size: 9px; letter-spacing: 0.12em; }
+body.touch #objective-dist { font-size: 10px; }
+body.touch #stats-bars { gap: 6px; }
+body.touch .bar-track { height: 9px; }
+body.touch #interact-prompt {
+  top: 54%;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  max-width: 74vw;
+  text-align: center;
+}
+body.touch #level-card-name { font-size: clamp(26px, 8vw, 46px); letter-spacing: 0.2em; }
+body.touch #level-card-tag { font-size: 11px; letter-spacing: 0.24em; }
 
 body.touch #equipped-label {
   right: auto;
   left: 50%;
-  bottom: 58px;
+  bottom: 56px;
   transform: translateX(-50%);
   text-align: center;
   font-size: 11px;
+  max-width: 52vw;
 }
 
-body.touch #hotbar { bottom: 6px; pointer-events: auto; }
-body.touch .hotbar-slot { width: 38px; height: 38px; cursor: pointer; }
-body.touch .hotbar-icon svg { width: 17px; height: 17px; }
+body.touch #hotbar { bottom: calc(var(--edge-b, 12px) - 4px); pointer-events: auto; gap: 5px; }
+body.touch .hotbar-slot { width: 42px; height: 42px; cursor: pointer; }
+body.touch .hotbar-icon svg { width: 19px; height: 19px; }
 
-/* held upright there is no room for a row of tools across the top */
+/* Held upright there is less width than there are thumbs: the movement zone
+   shrinks to the corner it is actually used in, and the quick bar climbs
+   above the whole cluster instead of sitting inside it. */
 @media (orientation: portrait) {
-  #touch-tools { flex-direction: column; top: 62px; right: 10px; }
-  #touch-stick { left: 82px; top: calc(100% - 168px); }
-  body.touch #hotbar { bottom: 186px; flex-wrap: wrap; justify-content: center; max-width: 92vw; }
-  body.touch #equipped-label { bottom: 232px; }
-}
-
-/* the bag is laid out in fixed pixels, so it shrinks whole rather than reflow */
-@media (max-height: 560px) { #inventory-panel { transform: scale(0.78); } }
-@media (max-height: 440px) { #inventory-panel { transform: scale(0.64); } }
-
-body.touch #inspect-canvas {
-  width: 128px;
-  height: 128px;
-  right: auto;
-  left: 12px;
-  bottom: 92px;
-}
-body.touch #inspect-label {
-  right: auto;
-  left: 12px;
-  bottom: 58px;
-  width: 150px;
-  font-size: 10px;
-  line-height: 1.5;
-  letter-spacing: 0.1em;
+  /* a row of tools across the top would run straight through the objective
+     tracker, so upright they hang in a column down the right edge */
+  #touch-tools {
+    flex-direction: column;
+    top: calc(var(--edge-t) + var(--btn-small) + 8px);
+    right: var(--edge-r);
+  }
+  #touch-move-zone { width: 55%; height: 42%; }
+  #touch-stick { left: calc(var(--edge-l) + 62px); top: calc(100% - var(--edge-b) - 78px); }
+  body.touch #hotbar { bottom: 208px; flex-wrap: wrap; justify-content: center; max-width: 92vw; }
+  body.touch #equipped-label { bottom: 256px; }
+  body.touch #interact-prompt { top: 46%; }
 }
 
 /* short screens (a phone held sideways) can't spare the room */
 @media (max-height: 460px) {
-  .touch-btn { width: 54px; height: 54px; font-size: 11px; }
-  .touch-btn.big { width: 74px; height: 74px; font-size: 12px; }
-  .touch-btn.small { width: 40px; height: 40px; font-size: 8px; }
-  #touch-actions { gap: 7px; bottom: 12px; }
-  #touch-stick { top: calc(100% - 138px); left: 92px; }
-  body.touch #stats-bars { top: 96px; width: 132px; }
-  body.touch #objective { width: 140px; }
+  #touch-controls { --btn: 58px; --btn-big: 78px; --btn-small: 46px; }
+  .touch-btn .touch-cap { font-size: 10px; }
+  .touch-btn.big .touch-cap { font-size: 12px; }
+  .touch-glyph svg { width: 17px; height: 17px; }
+  #touch-actions { gap: 7px; }
+  #touch-stick { top: calc(100% - var(--edge-b) - 78px); }
+  body.touch #hud-left { width: 136px; gap: 7px; }
+  body.touch #equipped-label { bottom: 52px; }
 
   .landing { padding-top: 4vh; }
   .landing-hero { min-height: 86vh; gap: 12px; }
   .game-title { font-size: clamp(30px, 6vw, 60px); }
   .menu-btn.big { font-size: 17px; padding: 12px 34px; }
   .menu-screen .menu-btn { font-size: 16px; padding: 11px 32px; }
+}
+
+/* ---------- The bag, on a screen you hold in one hand ---------- */
+/* The grid reflows to a smaller tile rather than the whole panel being scaled
+   into something you need to squint at. */
+#inventory-grid { --inv-cell: 74px; }
+#inventory-panel {
+  max-width: min(96vw, 560px);
+  max-height: calc(100% - 16px);
+  overflow-y: auto;
+}
+
+/* On a mouse this row is not a row at all: the viewport and its caption float
+   in the screen corner and the drop button does not exist. */
+#inventory-detail { display: contents; }
+#inventory-actions { display: none; }
+
+body.touch #inventory-detail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  min-height: 82px;
+  max-width: 100%;
+}
+body.touch #inspect-canvas,
+body.touch #inspect-label { position: static; }
+body.touch #inspect-canvas { width: 76px; height: 76px; flex: none; }
+body.touch #inspect-label {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: 0.08em;
+  opacity: 0.75;
+}
+body.touch #inventory-actions { display: block; flex: none; }
+body.touch #inventory-actions.hidden { display: none !important; }
+#inventory-action-drop {
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  padding: 10px 20px;
+  color: #e8d989;
+  background: rgba(232, 217, 137, 0.08);
+  border: 1px solid rgba(232, 217, 137, 0.45);
+  cursor: pointer;
+}
+#inventory-action-drop:active { background: rgba(232, 217, 137, 0.22); }
+.inv-item.selected { border-color: #e8d989; background: rgba(232, 217, 137, 0.16); }
+
+@media (max-width: 560px) {
+  #inventory-grid { --inv-cell: 58px; }
+  #inventory-panel { padding: 18px 16px 14px; gap: 10px; }
+  #inventory-panel h2 { font-size: 15px; letter-spacing: 0.3em; }
+  .inv-item { font-size: 9px; padding: 3px; gap: 2px; letter-spacing: 0; }
+  .inv-item .item-icon svg { width: 19px; height: 19px; }
+  /* a tile this small holds an icon and about two words */
+  .inv-item .item-name {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.2;
+  }
+}
+@media (max-height: 460px) {
+  #inventory-grid { --inv-cell: 50px; }
+  #inventory-panel { padding: 10px 18px 8px; gap: 5px; }
+  #inventory-panel h2 { font-size: 13px; letter-spacing: 0.26em; }
+  #inventory-weight { font-size: 10px; }
+  .inventory-hint { font-size: 9px; }
+  body.touch #inventory-detail { min-height: 56px; gap: 8px; }
+  body.touch #inspect-canvas { width: 58px; height: 58px; }
+  #inventory-action-drop { padding: 8px 16px; font-size: 11px; }
+  .inv-item { font-size: 8px; padding: 2px; gap: 1px; letter-spacing: 0; }
+  .inv-item .item-icon svg { width: 16px; height: 16px; }
+  .inv-item .item-name {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.15;
+  }
+}
+
+/* ---------- Menus on a narrow screen ---------- */
+/* The wide letter-spacing that makes a title look carved makes a button wrap
+   into three lines on a phone. */
+@media (max-width: 520px) {
+  .menu-btn { font-size: 15px; letter-spacing: 0.16em; padding: 13px 20px; }
+  .menu-btn.big { font-size: 17px; letter-spacing: 0.14em; padding: 15px 22px; }
+  .menu-btn.ghost { font-size: 11px; }
+  .overlay .menu-btn { max-width: 92vw; }
+  .tagline { letter-spacing: 0.2em; font-size: 13px; }
+  .objective-pitch { letter-spacing: 0.14em; }
+  .landing { padding-left: 16px; padding-right: 16px; }
+  #keypad-keys { grid-template-columns: repeat(3, 68px); }
+  .keypad-key { padding: 16px 0; }
 }
 
 /* the white of the impact bleeds into the title card */

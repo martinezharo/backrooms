@@ -33,7 +33,7 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'bottle', name: 'GLASS BOTTLE',
     weight: 1, gridW: 1, gridH: 1, kind: 'throwable',
     damage: 16, cooldown: 0.5, durability: 1, range: 18,
-    description: 'Carries water. Right click drinks, E fills it. Still throws.',
+    description: 'Carries water. Fill it at any tap, drink it anywhere. Still throws.',
   },
   knife: {
     id: 'knife', name: 'KITCHEN KNIFE',
@@ -57,7 +57,7 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'flashlight', name: 'TORCH',
     weight: 1, gridW: 1, gridH: 1, kind: 'tool',
     damage: 0, cooldown: 0, durability: Infinity, range: 0,
-    description: 'Press F. Smilers hate it.',
+    description: 'Smilers hate the beam. Burns battery while it is on.',
   },
   detector: {
     id: 'detector', name: 'FIELD RECEIVER',

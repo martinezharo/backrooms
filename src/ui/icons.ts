@@ -57,9 +57,37 @@ const ICONS: Record<string, string> = {
   ),
 };
 
+/** Glyphs for the on-screen controls — a phone reads a picture faster than
+ *  it reads a four-letter abbreviation. */
+const CONTROLS: Record<string, string> = {
+  bag: wrap(
+    '<path d="M9.2 7V5.8a2.8 2.8 0 0 1 5.6 0V7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>'
+    + '<path d="M6.8 7.4h10.4a3.8 3.8 0 0 1 3.8 3.8v6.4A3.4 3.4 0 0 1 17.6 21H6.4A3.4 3.4 0 0 1 3 17.6v-6.4a3.8 3.8 0 0 1 3.8-3.8z"/>'
+    + '<rect x="3" y="12.4" width="18" height="2.6" fill="#0e0c04"/>'
+    + '<rect x="10.2" y="15.4" width="3.6" height="3.6" rx="0.9" fill="#0e0c04"/>',
+  ),
+  torch: ICONS.flashlight,
+  signal: wrap(
+    '<rect x="7.5" y="12" width="9" height="9.2" rx="1.4"/>'
+    + '<path d="M12 12V6.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>'
+    + '<circle cx="12" cy="4.6" r="1.7"/>'
+    + '<path d="M6.6 8.4a7 7 0 0 1 0-4.6M17.4 8.4a7 7 0 0 0 0-4.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  ),
+  drop: wrap(
+    '<path d="M12 2.6v10.2M12 14.6l-4-4M12 14.6l4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+    + '<path d="M4 17.4v2.2a1.8 1.8 0 0 0 1.8 1.8h12.4a1.8 1.8 0 0 0 1.8-1.8v-2.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  ),
+  pause: wrap('<rect x="6.5" y="4.5" width="4" height="15" rx="1"/><rect x="13.5" y="4.5" width="4" height="15" rx="1"/>'),
+};
+
 const FALLBACK = wrap('<circle cx="12" cy="12" r="6"/>');
 
 /** SVG markup for an item id (inventory tiles, hotbar, drag ghost). */
 export function itemIcon(id: string): string {
   return ICONS[id] ?? FALLBACK;
+}
+
+/** SVG markup for an on-screen control button. */
+export function controlIcon(id: string): string {
+  return CONTROLS[id] ?? FALLBACK;
 }

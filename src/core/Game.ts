@@ -26,6 +26,7 @@ import { World } from '../world/World';
 import {
   BATTERY_CHARGE, BOTTLE_CAPACITY, BOTTLE_DRINK_RATE, CHUNK, PLAYER_HEIGHT, RUN_SPEED,
 } from './constants';
+import { ctrl, cue, holdCue, usingTouch } from '../ui/controls';
 import { HUD, ObjectiveView } from '../ui/HUD';
 import { InventoryUI } from '../ui/InventoryUI';
 import { Keypad } from '../ui/Keypad';
@@ -71,6 +72,26 @@ const FADE_TIME = 1.5;
 
 const EMPTY_DESCENT: DescentState = { progress: 0, open: false, flood: 0, codeKnown: false };
 
+/** how close a monster has to be standing before you can hug it */
+const HUG_RANGE = 2.6;
+
+/** What the thing in your hand does when you swing at something with it —
+ *  the label the on-screen primary button wears. */
+function attackVerb(eq: ItemInstance | null): string {
+  if (!eq) return 'HIT';
+  if (eq.def.id === 'pistol') return 'FIRE';
+  if (eq.def.id === 'extinguisher') return 'SPRAY';
+  return eq.def.kind === 'throwable' ? 'THROW' : 'HIT';
+}
+
+/** …and what it does on the secondary, if anything at all. */
+function secondaryVerb(eq: ItemInstance | null): string | null {
+  if (!eq || eq.def.kind === 'melee') return 'BLOCK';
+  if (eq.def.id === 'pistol') return 'AIM';
+  if (eq.def.id === 'bottle') return 'DRINK';
+  return null;
+}
+
 export class Game {
   private state: GameState = 'menu';
   private renderer: THREE.WebGLRenderer;
@@ -112,6 +133,8 @@ export class Game {
   /** index into DEPTHS: which floor of the building is under your feet */
   private depth = 0;
   private descent: DescentState = { ...EMPTY_DESCENT };
+  /** did the way down offer you something to press this frame */
+  private descentUsable = false;
   private descentMgr: DescentManager;
   private keypad = new Keypad();
   /** car id → seconds of screaming left in it */
@@ -541,7 +564,7 @@ export class Game {
       else void this.input.requestPointerLock();
     }
     if (this.input.pressed('KeyF') && this.inventory.has('flashlight')) this.toggleTorch();
-    if (this.input.pressed('KeyR') && !uiOpen && this.inventory.has('detector')) {
+    if (this.input.pressed('KeyR') && !uiOpen && this.canTuneReceiver()) {
       this.receiverOnExit = !this.receiverOnExit;
       this.audio.playSfx('click', 0.45);
     }
@@ -587,6 +610,9 @@ export class Game {
     const descentPrompt = falling ? null : this.updateDescent(dt, uiOpen);
     let prompt: string | null = descentPrompt;
     let drinkingTap = false;
+    // whether anything in reach would answer a press of USE — the on-screen
+    // button lights up rather than sitting there looking equally pressable
+    let useAvailable = this.descentUsable;
 
     // the door out takes priority over anything else you could be touching
     const portal = this.portals.portal;
@@ -595,11 +621,13 @@ export class Game {
       const fuses = this.fuseCount();
       if (!portal.isOpen) {
         prompt = fuses > 0
-          ? `E — FEED ${fuses} FUSE${fuses > 1 ? 'S' : ''} INTO THE DOOR`
+          ? cue('use', `FEED ${fuses} FUSE${fuses > 1 ? 'S' : ''} INTO THE DOOR`)
           : 'DEAD DOOR — IT NEEDS FUSES';
+        useAvailable = fuses > 0;
         if (fuses > 0 && this.input.pressed('KeyE')) this.openPortal(fuses);
       } else {
-        prompt = 'E — STEP THROUGH';
+        prompt = cue('use', 'STEP THROUGH');
+        useAvailable = true;
         if (this.input.pressed('KeyE')) this.beginEscape();
       }
     }
@@ -611,10 +639,13 @@ export class Game {
       const isBattery = pickup.item.def.id === 'battery';
       const torchFull = this.torchCharge >= 99.5;
       if (isBattery) {
-        prompt = torchFull ? 'BATTERY — TORCH IS ALREADY FULL' : `E — CHARGE THE TORCH (+${BATTERY_CHARGE}%)`;
+        prompt = torchFull
+          ? 'BATTERY — TORCH IS ALREADY FULL'
+          : cue('use', `CHARGE THE TORCH (+${BATTERY_CHARGE}%)`);
       } else {
-        prompt = `E — TAKE ${pickup.item.def.name}`;
+        prompt = cue('use', `TAKE ${pickup.item.def.name}`);
       }
+      useAvailable = !(isBattery && torchFull);
       if (this.input.pressed('KeyE') && !(isBattery && torchFull)) {
         if (isBattery) {
           this.pickups.take(pickup);
@@ -627,7 +658,8 @@ export class Game {
             this.inventory.add(this.pickups.take(pickup));
             this.audio.playSfx('pickup', 0.6);
           } else {
-            this.flashMessage(`${verdict === 'weight' ? 'TOO HEAVY' : 'NO SPACE'} — TAB: BAG, DRAG AN ITEM OUT TO DROP`);
+            this.flashMessage(
+              `${verdict === 'weight' ? 'TOO HEAVY' : 'NO SPACE'} — ${ctrl('bag')}, THEN DROP SOMETHING`);
           }
         }
       }
@@ -638,7 +670,8 @@ export class Game {
     if (vend && !pickup) {
       const left = this.vendingLeft.get(vend.id) ?? VENDING_SERVINGS;
       if (left > 0) {
-        prompt = `E — ALMOND WATER (${left} LEFT)`;
+        prompt = cue('use', `ALMOND WATER (${left} LEFT)`);
+        useAvailable = true;
         if (this.input.pressed('KeyE')) {
           this.vendingLeft.set(vend.id, left - 1);
           this.stats.thirst = 100;
@@ -658,7 +691,7 @@ export class Game {
     if (tap && !pickup && !vend && !atPortal) {
       if (p.crouching) {
         drinkingTap = true;
-        prompt = canFill ? 'DRINKING…  ·  E — FILL THE BOTTLE' : 'DRINKING…';
+        prompt = canFill ? `DRINKING…  ·  ${cue('use', 'FILL THE BOTTLE')}` : 'DRINKING…';
         p.drinkDip += (1 - p.drinkDip) * Math.min(1, dt * 5);
         this.gulpTimer -= dt;
         if (this.gulpTimer <= 0) {
@@ -666,12 +699,16 @@ export class Game {
           this.audio.playSfx('gulp', 0.5);
         }
       } else {
-        prompt = canFill ? 'E — FILL THE BOTTLE  ·  CROUCH (C) TO DRINK' : 'CROUCH (C) TO DRINK';
+        const crouchToDrink = cue('crouch', 'DRINK FROM IT');
+        prompt = canFill ? `${cue('use', 'FILL THE BOTTLE')}  ·  ${crouchToDrink}` : crouchToDrink;
       }
     } else if (canFill && atSource) {
-      prompt = 'E — FILL THE BOTTLE';
+      prompt = cue('use', 'FILL THE BOTTLE');
     }
-    if (canFill && atSource && this.input.pressed('KeyE')) this.fillBottle(bottle!);
+    if (canFill && atSource) {
+      useAvailable = true;
+      if (this.input.pressed('KeyE')) this.fillBottle(bottle!);
+    }
 
     // …and drink it back anywhere, holding right click
     let drinkingBottle = false;
@@ -703,7 +740,7 @@ export class Game {
       if (this.inventory.equipped) {
         this.dropItem(this.inventory.equipped);
       } else if (this.inventory.items.length > 0) {
-        this.flashMessage('HOLD AN ITEM FIRST (1–9 / WHEEL), THEN G DROPS IT');
+        this.flashMessage(`HOLD SOMETHING FIRST — ${ctrl('quick')}`);
       }
     }
 
@@ -836,23 +873,38 @@ export class Game {
     let detail = '';
     if (eq?.def.id === 'pistol') detail = `${eq.ammo} rds`;
     else if (eq?.def.id === 'bottle') {
-      const sip = this.input.touchMode ? 'BLOCK' : 'RIGHT CLICK';
       // the fill hint belongs to the tap/pool prompt, not to a permanent label
       detail = eq.water > 0
-        ? `WATER ${Math.round((eq.water / BOTTLE_CAPACITY) * 100)}% · HOLD ${sip} TO DRINK`
+        ? `WATER ${Math.round((eq.water / BOTTLE_CAPACITY) * 100)}% · HOLD ${ctrl('drink')} TO DRINK`
         : 'EMPTY';
     } else if (eq && isFinite(eq.def.durability)) detail = `${Math.max(0, Math.ceil((eq.durability / eq.def.durability) * 100))}%`;
-    const torch = !this.inventory.has('flashlight') ? ''
+    // On a phone every one of these is a button with its own label two
+    // centimetres away. Printing the shortcut again is clutter, not help.
+    const hasTorch = this.inventory.has('flashlight');
+    const torch = !hasTorch ? ''
       : this.torchCharge <= 1
         ? ' · TORCH DEAD'
-        : this.lighting.flashlightOn ? ' · TORCH ON' : ' · TORCH [F]';
-    this.hud.setEquipped((eq ? `${eq.def.name} · DROP [G]` : 'FISTS') + torch, detail);
+        : this.lighting.flashlightOn ? ' · TORCH ON'
+          : usingTouch() ? '' : ` · TORCH [${ctrl('torch')}]`;
+    const held = !eq ? 'FISTS'
+      : usingTouch() ? eq.def.name : `${eq.def.name} · DROP [${ctrl('drop')}]`;
+    this.hud.setEquipped(held + torch, detail);
     this.hud.setHotbar(this.inventory.items.slice(0, 10).map((p, i) => ({
       key: i === 9 ? '0' : String(i + 1),
       id: p.item.def.id,
       equipped: this.inventory.equipped === p.item,
     })));
 
+    this.touch.setContext({
+      attack: attackVerb(eq),
+      secondary: secondaryVerb(eq),
+      usable: useAvailable && !uiOpen,
+      torch: hasTorch ? (this.torchCharge > 1 && this.lighting.flashlightOn) : null,
+      // the button wears the thing it would point you at next, so a tap has a
+      // visible promise attached rather than a three-letter abbreviation
+      receiver: this.canTuneReceiver() ? (this.receiverOnExit ? 'FUSES' : 'DOOR') : null,
+      drop: !!eq,
+    });
   }
 
   // -------------------------------------------------------- the way down
@@ -939,6 +991,7 @@ export class Game {
     const prop = this.descentProp;
     const holdE = !uiOpen && this.input.down('KeyE');
     let prompt: string | null = null;
+    this.descentUsable = false;
 
     // ---- the sub-landmark: the wheel that floods a level, the wall that
     //      somebody wrote a door code on ----
@@ -951,7 +1004,8 @@ export class Game {
         this.flashMessage(`${descentLayout(this.seed, this.depth).code} — DON'T WRITE IT DOWN`);
       }
       if (sub.spot.kind === 'valve' && d < 2.3 && this.descent.progress < 1) {
-        prompt = 'HOLD E — THE MAIN VALVE';
+        prompt = holdCue('use', 'THE MAIN VALVE');
+        this.descentUsable = true;
         if (holdE) {
           this.descent.progress = Math.min(1, this.descent.progress + dt / VALVE_TURN);
           prompt = `TURNING…  ${Math.round(this.descent.progress * 100)}%`;
@@ -998,7 +1052,8 @@ export class Game {
           const live = this.alarms.has(car.id);
           prompt = live
             ? `ALREADY SCREAMING · ${this.liveAlarms()}/${ALARMS_NEEDED}`
-            : `E — SET THE ALARM OFF (${this.liveAlarms()}/${ALARMS_NEEDED})`;
+            : cue('use', `SET THE ALARM OFF (${this.liveAlarms()}/${ALARMS_NEEDED})`);
+          this.descentUsable = !live;
           if (!live && !uiOpen && this.input.pressed('KeyE')) {
             this.alarms.set(car.id, ALARM_TIME);
             this.alarmChirp = 0;
@@ -1019,7 +1074,8 @@ export class Game {
         if (toProp < 2.2 && !this.descent.open) {
           prompt = this.descent.progress > 0
             ? `PUSHING…  ${Math.round(this.descent.progress * 100)}%`
-            : 'HOLD E — THE WALL IS SOFT HERE';
+            : holdCue('use', 'THE WALL IS SOFT HERE');
+          this.descentUsable = true;
           if (holdE) {
             this.descent.progress = Math.min(1, this.descent.progress + dt / SOFTWALL_PUSH);
             if (this.descent.progress >= 1) {
@@ -1039,8 +1095,9 @@ export class Game {
         if (this.descent.open && toProp < 2.4) this.beginDescend();
         else if (kind === 'door' && !this.descent.open && toProp < 3.2) {
           prompt = this.descent.codeKnown
-            ? `E — KEYPAD (${descentLayout(this.seed, this.depth).code})`
-            : 'E — KEYPAD · FOUR DIGITS YOU DO NOT HAVE';
+            ? cue('use', `KEYPAD (${descentLayout(this.seed, this.depth).code})`)
+            : cue('use', 'KEYPAD · FOUR DIGITS YOU DO NOT HAVE');
+          this.descentUsable = true;
           if (!uiOpen && !this.keypad.open && this.input.pressed('KeyE')) {
             this.keypad.show();
             this.expectUnlock = true;
@@ -1069,7 +1126,8 @@ export class Game {
           if (!this.player.underwater) {
             prompt = 'THE HATCH IS DOWN THERE — YOU HAVE TO GO UNDER';
           } else {
-            prompt = `HOLD E — THE WHEEL IS SEIZED  ${Math.round(this.descent.progress * 100)}%`;
+            prompt = `${holdCue('use', 'THE WHEEL IS SEIZED')}  ${Math.round(this.descent.progress * 100)}%`;
+            this.descentUsable = true;
             if (holdE) {
               this.descent.progress = Math.min(1, this.descent.progress + dt / HATCH_CRANK);
               if (this.valveGroan <= 0) {
@@ -1164,6 +1222,16 @@ export class Game {
   }
 
   /** Fuses pulled out of the world. Dropping one doesn't calm the floor down. */
+  /**
+   * Whether re-aiming the receiver would change anything. On the way down it
+   * has exactly one thing to point at — the way down — so the control is dead
+   * weight until the last floor puts fuses and a door on the map at once.
+   */
+  private canTuneReceiver(): boolean {
+    if (this.depth !== LAST_DEPTH || !this.inventory.has('detector')) return false;
+    return this.takenFuses() < objectiveLayout(this.seed).fuses.length;
+  }
+
   private takenFuses(): number {
     return objectiveLayout(this.seed).fuses
       .filter((f) => this.pickups.isConsumed(`fuse:${f.cx},${f.cz}`)).length;
@@ -1220,7 +1288,9 @@ export class Game {
       }
     }
 
-    const key = hasReceiver ? '  [R]' : '';
+    // the desktop hint for switching what the receiver points at — only where
+    // there is something to switch to; on a phone the button says it itself
+    const key = this.canTuneReceiver() && !usingTouch() ? `  [${ctrl('receiver')}]` : '';
     let view: ObjectiveView;
     if (last) {
       const open = this.portals.portal?.isOpen ?? false;
@@ -1356,7 +1426,7 @@ export class Game {
     bottle.water = BOTTLE_CAPACITY;
     this.inventory.onChanged?.();
     this.audio.playSfx('splash', 0.35);
-    this.flashMessage('BOTTLE FULL — HOLD RIGHT CLICK TO DRINK');
+    this.flashMessage(`BOTTLE FULL — HOLD ${ctrl('drink')} TO DRINK`);
   }
 
   /** F: switch the torch. A flat one needs a battery off the floor. */
@@ -1374,7 +1444,7 @@ export class Game {
    *  becomes your friend for the rest of the run and follows you around. */
   private tryHug(): void {
     let best: Enemy | null = null;
-    let bestDist = 2.6;
+    let bestDist = HUG_RANGE;
     for (const e of this.spawner.enemies) {
       if (!e.alive || e.befriended) continue;
       const d = e.position.distanceTo(this.player.position);

@@ -82,42 +82,46 @@
     <!-- In-game HUD -->
     <div id="hud" class="hidden">
       <div id="crosshair"></div>
-      <div id="stats-bars">
-        <div class="bar-row">
-          <span class="bar-icon health" aria-label="health">
-            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M12 21C5.4 14.4 2 10.8 2 7.6 2 5 4 3 6.5 3c1.7 0 3.4.9 4.4 2.4l1.1 1.5 1.1-1.5C14.1 3.9 15.8 3 17.5 3 20 3 22 5 22 7.6c0 3.2-3.4 6.8-10 13.4z"/></svg>
-          </span>
-          <div class="bar-track"><div id="health-fill" class="bar-fill health"></div></div>
+      <!-- Top-left column. On a mouse these two sit in opposite corners and
+           this wrapper is not a box at all; on a phone they stack, and the
+           bars follow the objective down however many lines its title takes. -->
+      <div id="hud-left">
+        <div id="stats-bars">
+          <div class="bar-row">
+            <span class="bar-icon health" aria-label="health">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M12 21C5.4 14.4 2 10.8 2 7.6 2 5 4 3 6.5 3c1.7 0 3.4.9 4.4 2.4l1.1 1.5 1.1-1.5C14.1 3.9 15.8 3 17.5 3 20 3 22 5 22 7.6c0 3.2-3.4 6.8-10 13.4z"/></svg>
+            </span>
+            <div class="bar-track"><div id="health-fill" class="bar-fill health"></div></div>
+          </div>
+          <div class="bar-row">
+            <span class="bar-icon thirst" aria-label="thirst">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M12 2.2C8.4 7.4 5.4 10.8 5.4 14.6a6.6 6.6 0 0 0 13.2 0c0-3.8-3-7.2-6.6-12.4z"/></svg>
+            </span>
+            <div class="bar-track"><div id="thirst-fill" class="bar-fill thirst"></div></div>
+          </div>
+          <div class="bar-row hidden" id="oxygen-row">
+            <span class="bar-icon oxygen" aria-label="breath">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M12 3c-1 3.2-3.6 4.4-3.6 7.2A3.6 3.6 0 0 0 12 13.8a3.6 3.6 0 0 0 3.6-3.6C15.6 7.4 13 6.2 12 3z"/><circle cx="6.2" cy="17.4" r="2.4"/><circle cx="16.8" cy="18.6" r="1.7"/></svg>
+            </span>
+            <div class="bar-track"><div id="oxygen-fill" class="bar-fill oxygen"></div></div>
+          </div>
+          <div class="bar-row hidden" id="torch-row">
+            <span class="bar-icon torch" aria-label="torch battery">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M8.5 2.5h7l-1.2 6h-4.6l-1.2-6z"/><path d="M9.8 9.5h4.4V20a1.4 1.4 0 0 1-1.4 1.4h-1.6A1.4 1.4 0 0 1 9.8 20V9.5z"/></svg>
+            </span>
+            <div class="bar-track thin"><div id="torch-fill" class="bar-fill torch"></div></div>
+          </div>
         </div>
-        <div class="bar-row">
-          <span class="bar-icon thirst" aria-label="thirst">
-            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M12 2.2C8.4 7.4 5.4 10.8 5.4 14.6a6.6 6.6 0 0 0 13.2 0c0-3.8-3-7.2-6.6-12.4z"/></svg>
-          </span>
-          <div class="bar-track"><div id="thirst-fill" class="bar-fill thirst"></div></div>
-        </div>
-        <div class="bar-row hidden" id="oxygen-row">
-          <span class="bar-icon oxygen" aria-label="breath">
-            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M12 3c-1 3.2-3.6 4.4-3.6 7.2A3.6 3.6 0 0 0 12 13.8a3.6 3.6 0 0 0 3.6-3.6C15.6 7.4 13 6.2 12 3z"/><circle cx="6.2" cy="17.4" r="2.4"/><circle cx="16.8" cy="18.6" r="1.7"/></svg>
-          </span>
-          <div class="bar-track"><div id="oxygen-fill" class="bar-fill oxygen"></div></div>
-        </div>
-        <div class="bar-row hidden" id="torch-row">
-          <span class="bar-icon torch" aria-label="torch battery">
-            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M8.5 2.5h7l-1.2 6h-4.6l-1.2-6z"/><path d="M9.8 9.5h4.4V20a1.4 1.4 0 0 1-1.4 1.4h-1.6A1.4 1.4 0 0 1 9.8 20V9.5z"/></svg>
-          </span>
-          <div class="bar-track thin"><div id="torch-fill" class="bar-fill torch"></div></div>
-        </div>
-      </div>
 
-      <!-- Objective tracker -->
-      <div id="objective" class="hidden">
-        <div id="objective-title">FIND THE FUSES</div>
-        <div id="objective-pips"></div>
-        <div id="objective-track">
-          <span id="objective-arrow">
-            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M12 2 20.5 21 12 16.6 3.5 21z"/></svg>
-          </span>
-          <span id="objective-dist"></span>
+        <div id="objective" class="hidden">
+          <div id="objective-title">FIND THE FUSES</div>
+          <div id="objective-pips"></div>
+          <div id="objective-track">
+            <span id="objective-arrow">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M12 2 20.5 21 12 16.6 3.5 21z"/></svg>
+            </span>
+            <span id="objective-dist"></span>
+          </div>
         </div>
       </div>
       <div id="interact-prompt" class="hidden"></div>
@@ -160,11 +164,19 @@
         <h2>INVENTORY</h2>
         <div id="inventory-weight"></div>
         <div id="inventory-grid"></div>
+        <!-- On a mouse the viewport and its caption float in the corner while
+             you hover; a finger has nothing to hover with, so on touch this
+             row folds back into the panel under the tile you tapped. -->
+        <div id="inventory-detail">
+          <canvas id="inspect-canvas" width="280" height="280" class="hidden"></canvas>
+          <div id="inspect-label" class="hidden"></div>
+          <div id="inventory-actions" class="hidden">
+            <button id="inventory-action-drop" type="button">PUT IT DOWN</button>
+          </div>
+        </div>
         <div class="inventory-hint mouse-only">Click: equip / unequip &nbsp;·&nbsp; Hover: inspect &nbsp;·&nbsp; Drag out of the bag: drop &nbsp;·&nbsp; G: drop equipped &nbsp;·&nbsp; TAB: close</div>
-        <div class="inventory-hint touch-only">Tap: equip / unequip &nbsp;·&nbsp; DROP: throw down what you hold &nbsp;·&nbsp; BAG: close</div>
+        <div class="inventory-hint touch-only">Tap an item to take it in hand and look it over &nbsp;·&nbsp; BAG closes the bag</div>
       </div>
-      <canvas id="inspect-canvas" width="280" height="280" class="hidden"></canvas>
-      <div id="inspect-label" class="hidden"></div>
     </div>
 
     <!-- Landing page / start screen -->
@@ -223,10 +235,16 @@
 
         <section class="landing-controls controls-help">
           <h3>Controls</h3>
-          <p>WASD move · Mouse look · Space jump · C/Ctrl crouch · Shift run</p>
-          <p>E interact / fill bottle · LMB attack · RMB block/aim/drink · TAB inventory · G drop held item · F torch · R switch receiver</p>
-          <p>1–9/0 quick equip · mouse wheel cycle items</p>
-          <p class="touch-only">On phones and tablets: left thumb steers, right thumb looks, buttons do the rest. Push the stick to the rim to sprint. Tap the hotbar to swap what's in your hand.</p>
+          <div class="mouse-only">
+            <p>WASD move · Mouse look · Space jump · C/Ctrl crouch · Shift run</p>
+            <p>E interact / fill bottle · LMB attack · RMB block/aim/drink · TAB inventory · G drop held item · F torch · R switch receiver</p>
+            <p>1–9/0 quick equip · mouse wheel cycle items</p>
+          </div>
+          <div class="touch-only">
+            <p>Left thumb steers, right thumb looks. Push the stick all the way out to run.</p>
+            <p>USE takes and opens things · the big button swings what you are holding · JUMP and CROUCH sit beside it.</p>
+            <p>The buttons down the right edge — the bag, the torch, dropping what you hold, re-aiming the receiver — appear as soon as they have something to do. Tap the bar along the bottom to change hands.</p>
+          </div>
         </section>
       </main>
 

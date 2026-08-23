@@ -1,5 +1,6 @@
 // DOM-based HUD: survival bars, prompts, equipped label, FPS, biome banner.
 
+import { usingTouch } from './controls';
 import { itemIcon } from './icons';
 
 export interface ObjectiveView {
@@ -194,23 +195,32 @@ export class HUD {
     this.equipped.innerHTML = content;
   }
 
-  /** Always-visible quick bar; only rebuilds the DOM when contents change. */
+  /**
+   * Always-visible quick bar; only rebuilds the DOM when contents change.
+   * The corner badges are keyboard furniture — the number key that equips the
+   * slot, the key that drops it. A thumb taps the slot itself, so on touch the
+   * badges come off and the icons get the room instead.
+   */
   setHotbar(slots: { key: string; id: string; equipped: boolean }[]): void {
     const sig = slots.map((s) => `${s.key}${s.id}${s.equipped ? '*' : ''}`).join('|');
     if (sig === this.hotbarSig) return;
     this.hotbarSig = sig;
+    const badges = !usingTouch();
     this.hotbar.innerHTML = '';
     for (const [i, s] of slots.entries()) {
       const el = document.createElement('div');
       el.className = 'hotbar-slot' + (s.equipped ? ' equipped' : '');
-      const key = document.createElement('span');
-      key.className = 'hotbar-key';
-      key.textContent = s.key;
       const icon = document.createElement('span');
       icon.className = 'hotbar-icon';
       icon.innerHTML = itemIcon(s.id);
-      el.append(key, icon);
-      if (s.equipped) {
+      if (badges) {
+        const key = document.createElement('span');
+        key.className = 'hotbar-key';
+        key.textContent = s.key;
+        el.appendChild(key);
+      }
+      el.appendChild(icon);
+      if (badges && s.equipped) {
         const drop = document.createElement('span');
         drop.className = 'hotbar-drop';
         drop.textContent = 'G⇣';
@@ -291,7 +301,8 @@ export class HUD {
     this.fpsFrames++;
     this.fpsElapsed += frameSeconds;
     if (this.fpsElapsed < 0.5) return;
-    this.fps.textContent = `${Math.round(this.fpsFrames / this.fpsElapsed)} FPS`;
+    // a phone has no corner to spare for it; the counter is hidden there
+    if (!usingTouch()) this.fps.textContent = `${Math.round(this.fpsFrames / this.fpsElapsed)} FPS`;
     this.fpsFrames = 0;
     this.fpsElapsed = 0;
   }
