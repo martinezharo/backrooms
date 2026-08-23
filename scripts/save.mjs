@@ -158,15 +158,30 @@ console.log('pause reassurance:', JSON.stringify(pauseNote));
 await page.screenshot({ path: '/tmp/save_pause.png' });
 
 await page.click('#btn-save-quit');
-// the landing page has to come back with the run on offer, not just come back
-const quitLanded = await page.waitForFunction(() => {
-  if (window.__game) return false; // still the old document
-  const landing = !document.getElementById('start-screen').classList.contains('hidden');
-  const offered = !document.getElementById('btn-continue').classList.contains('hidden');
-  return landing && offered ? { onLanding: landing, continueOffered: offered } : false;
-}, { timeout: 20000, polling: 200 }).then((h) => h.jsonValue()).catch(() => ({
-  onLanding: false, continueOffered: false,
-}));
+// The landing page has to come back with the run on offer, not just come back.
+// Quitting reloads the document, which destroys any execution context polling
+// from inside the page — so the polling lives out here and shrugs off the
+// window where there is nothing to ask.
+const quitLanded = await (async () => {
+  // software rendering on a busy machine can take a while to rebuild the page
+  const deadline = Date.now() + 60000;
+  while (Date.now() < deadline) {
+    try {
+      const seen = await page.evaluate(() => ({
+        stale: !!window.__game, // still the old document
+        onLanding: !document.getElementById('start-screen').classList.contains('hidden'),
+        continueOffered: !document.getElementById('btn-continue').classList.contains('hidden'),
+      }));
+      if (!seen.stale && seen.onLanding && seen.continueOffered) {
+        return { onLanding: true, continueOffered: true };
+      }
+    } catch {
+      // mid-navigation: there is no context to ask yet
+    }
+    await wait(250);
+  }
+  return { onLanding: false, continueOffered: false };
+})();
 console.log('after save & quit:', JSON.stringify(quitLanded));
 await page.screenshot({ path: '/tmp/save_landing.png' });
 
