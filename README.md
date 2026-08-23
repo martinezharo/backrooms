@@ -19,8 +19,10 @@ The systems that define a run are:
 - stalking entities with distinct behaviours;
 - deterministic generation from `?seed=...`, with checkpoints and records in
   `localStorage`;
-- desktop mouse/keyboard controls and on-screen touch controls. Use
-  `?touch=1` or `?touch=0` to force touch mode on or off.
+- desktop mouse/keyboard controls, and an on-screen rig for touch devices that
+  labels every button with what it does to the thing in your hand and hides the
+  ones you have nothing to use. Use `?touch=1` or `?touch=0` to force touch mode
+  on or off.
 
 World geometry and textures are generated in code. Audio combines WebAudio
 synthesis with recorded ambience, footsteps, impacts, and other clips; see the

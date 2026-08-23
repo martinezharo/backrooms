@@ -22,7 +22,12 @@ The game uses Three.js and WebGL. World geometry and textures are generated in c
 - `Tab` or `I`: inventory. `F`: torch. `R`: receiver. `G`: drop.
 - `Esc`: pause and save a checkpoint.
 
-Touch controls are available on phones and tablets. The query parameters `?touch=1` and `?touch=0` force touch mode on or off.
+On phones and tablets the game switches to on-screen controls: the left thumb
+steers a stick that sprints when pushed all the way out, the right thumb looks,
+and labelled buttons cover USE, JUMP, CROUCH and whatever the held item does.
+The bag, torch, drop and receiver buttons appear only once they have something
+to do. The query parameters `?touch=1` and `?touch=0` force
+touch mode on or off.
 
 ## Good fit
 
