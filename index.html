@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>The Backrooms — Free Browser Horror Game · No Download, Play Instantly</title>
-  <meta name="description" content="Play The Backrooms free in your browser: a first-person survival horror game set in an infinite procedurally generated maze, hunted by entities that stalk you from the dark. No download, no install, no sign-up — click and play." />
+  <meta name="description" content="Play The Backrooms free in your browser — no download, no install, no sign-up. A first-person survival horror game: six endless procedurally generated levels, four entities hunting you, three fuses and one way out. Works on desktop and mobile." />
   <meta name="keywords" content="backrooms, backrooms game, free horror game, browser horror game, no download games, play backrooms online, survival horror online, webgl horror game, free online games" />
   <meta name="robots" content="index, follow" />
   <meta name="theme-color" content="#0e0c04" />
@@ -19,14 +19,14 @@
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://backrooms.4oli.com/" />
   <meta property="og:title" content="The Backrooms — Free Browser Horror Game (No Download)" />
-  <meta property="og:description" content="An infinite yellow maze. Entities that hunt you. 100% free, plays instantly in your browser — no download, no sign-up." />
+  <meta property="og:description" content="Six endless levels, four entities, three fuses and one way out. 100% free, plays instantly in your browser — no download, no sign-up." />
   <meta property="og:site_name" content="The Backrooms" />
   <meta property="og:locale" content="en_US" />
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="The Backrooms — Free Browser Horror Game (No Download)" />
-  <meta name="twitter:description" content="An infinite yellow maze. Entities that hunt you. 100% free, plays instantly in your browser." />
+  <meta name="twitter:description" content="Six endless levels, four entities, three fuses and one way out. Free, and it starts in your browser." />
 
   <!-- Structured data -->
   <script type="application/ld+json">
@@ -34,43 +34,137 @@
     "@context": "https://schema.org",
     "@type": "VideoGame",
     "name": "The Backrooms",
-    "description": "Free first-person survival horror game playable directly in the browser. Explore an infinite procedurally generated backrooms maze, scavenge weapons, manage thirst and evade entities that stalk you. No download or installation required.",
-    "genre": ["Horror", "Survival"],
+    "alternateName": "The Backrooms — browser horror game",
+    "description": "Free first-person survival horror game playable directly in the browser. Descend six procedurally generated Backrooms levels — Level 0, Level 1, Level 37, Level 7, Level 2 and Level ! — manage thirst, oxygen and torch charge, scavenge weapons, evade four stalking entities, and carry three fuses to the exit portal. No download or installation required.",
+    "genre": [
+      "Horror",
+      "Survival",
+      "Adventure"
+    ],
+    "gamePlatform": [
+      "Web Browser",
+      "Desktop",
+      "Mobile"
+    ],
     "playMode": "SinglePlayer",
-    "gamePlatform": "Web Browser",
+    "numberOfPlayers": {
+      "@type": "QuantitativeValue",
+      "value": 1
+    },
     "applicationCategory": "Game",
     "operatingSystem": "Any (web browser with WebGL)",
+    "inLanguage": "en",
     "isAccessibleForFree": true,
     "url": "https://backrooms.4oli.com/",
-    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD", "availability": "https://schema.org/InStock" }
+    "installUrl": "https://backrooms.4oli.com/",
+    "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+    "codeRepository": "https://github.com/martinezharo/backrooms",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD",
+      "availability": "https://schema.org/InStock"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What are the Backrooms?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "An internet horror legend about noclipping out of reality and landing in an endless off-yellow office — damp carpet, buzzing fluorescent lights, about six hundred million square miles of empty rooms, and something in there with you. This game is one playable version of it, not an official adaptation of any other Backrooms project."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is The Backrooms free to play?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes, completely. There is no purchase, no subscription, no sign-up and no advertising. The source code is public on GitHub under the GPL-3.0 licence."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Do I have to download or install anything?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. It is a WebGL game and it runs in the browser tab you are reading this in. Chrome, Firefox, Edge and Safari all work, on Windows, macOS, Linux, Android and iOS."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I play the Backrooms on a phone?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. On a touchscreen the game swaps to an on-screen rig: a stick under your left thumb, look with the right, and labelled buttons that appear only when the thing in your hand can actually use them."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How many levels are there?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Six: Level 0, Level 1, Level 37, Level 7, Level 2 and Level !. Each one is endless in every horizontal direction and built fresh from the seed of your run, so no two descents are the same maze."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do you escape the Backrooms?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Get to the bottom floor, find the three fuses scattered across it, carry them to the exit portal and step through. You can leave with fewer than three if your nerve goes — the door still opens, just barely."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does the game save my progress?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Pausing writes a checkpoint into your own browser, so you can close the tab and pick the run up later. Dying clears it: a checkpoint is for putting the game down, not for a second try at the same corner. Records stay local too. The only thing the game sends is an anonymous count of started and engaged runs with a country, no IP and no identifier, and ?telemetry=off switches even that off."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I replay the same maze?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Every run has a seed and it is in the address bar — ?seed=1234. Send someone that link and they get your maze, your fuses and your exit, exactly where you found them."
+        }
+      }
+    ]
   }
   </script>
 
   <!-- Favicon: the Smiler, inline SVG — no asset files -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230a0903'/%3E%3Ccircle cx='32' cy='30' r='27' fill='%23e8d989' opacity='0.07'/%3E%3Cellipse cx='22' cy='23' rx='8' ry='6.5' fill='%23ffffff' opacity='0.16'/%3E%3Cellipse cx='42' cy='23' rx='8' ry='6.5' fill='%23ffffff' opacity='0.16'/%3E%3Cellipse cx='22' cy='23' rx='5.2' ry='3.8' fill='%23ffffff'/%3E%3Cellipse cx='42' cy='23' rx='5.2' ry='3.8' fill='%23ffffff'/%3E%3Ccircle cx='23.5' cy='23.5' r='1.4' fill='%230a0903'/%3E%3Ccircle cx='43.5' cy='23.5' r='1.4' fill='%230a0903'/%3E%3Cpath d='M10 34 Q32 58 54 34 Q32 46 10 34 Z' fill='%23ffffff'/%3E%3Cg stroke='%230a0903' stroke-width='1.7'%3E%3Cpath d='M17 36v6M22 38v8M27 39v9M32 40v9M37 39v9M42 38v8M47 36v6'/%3E%3C/g%3E%3C/svg%3E" />
-  <!-- Keep the first paint independent from the full game stylesheet. -->
+  <!-- Keep the first paint independent from the full game stylesheet: enough
+       of the room to be recognisably a room before anything else arrives. -->
+  <link rel="preload" href="/fonts/archivo-latin-var.woff2" as="font" type="font/woff2" crossorigin />
   <style>
+    @font-face{font-family:'Archivo';src:url('/fonts/archivo-latin-var.woff2') format('woff2-variations');font-weight:100 900;font-stretch:62% 125%;font-display:swap}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     html,body,#app{width:100%;height:100%}
-    html,body{overflow:hidden;background:#000;font-family:'Courier New',monospace;color:#d8cfa8;user-select:none}
+    html,body{overflow:hidden;background:#0e0e08;font-family:'Courier New',monospace;color:#d8cfa8;user-select:none}
     #app{position:relative}
     #game-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
     .hidden{display:none!important}
-    .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;z-index:20}
-    .menu-screen{background:radial-gradient(ellipse at center,rgba(36,32,12,.92) 0%,rgba(5,4,1,.98) 75%),repeating-linear-gradient(0deg,rgba(255,240,160,.025) 0 2px,transparent 2px 4px)}
-    .landing{justify-content:flex-start;overflow-y:auto;padding:7vh 22px 36px;gap:0}
-    .landing-hero{display:flex;flex-direction:column;align-items:center;gap:18px;min-height:72vh;justify-content:center;text-align:center}
-    .game-title{font-size:clamp(40px,8vw,96px);letter-spacing:.22em;color:#e8d989;text-shadow:0 0 24px rgba(232,217,137,.55),0 0 90px rgba(232,217,137,.25);font-weight:700}
-    .tagline{font-size:15px;letter-spacing:.35em;opacity:.65;text-transform:lowercase}
-    .badges{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
-    .badge{font-size:11px;letter-spacing:.22em;text-transform:uppercase;padding:5px 12px;border:1px solid rgba(232,217,137,.35);background:rgba(232,217,137,.06);color:#e8d989}
-    .menu-btn{font-family:inherit;font-size:19px;letter-spacing:.3em;padding:13px 46px;background:transparent;color:#e8d989;border:1px solid rgba(232,217,137,.45);cursor:pointer}
-    .menu-btn.big{font-size:22px;padding:16px 54px;margin-top:8px}
-    .menu-btn:disabled{opacity:.55;cursor:wait}
-    .warn{font-size:12px;opacity:.5;letter-spacing:.2em}
-    .github-link{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));z-index:30;display:none;width:34px;height:34px;align-items:center;justify-content:center;color:#d8cfa8;opacity:.42}
+    .overlay{position:absolute;inset:0;z-index:20}
+    #start-screen{display:block;overflow-y:auto;background:#0e0e08}
+    .hero{--ceil-h:clamp(50px,8vh,96px);--floor-h:clamp(84px,15vh,172px);position:relative;min-height:100svh}
+    .ceiling{position:absolute;inset:0 0 auto;height:var(--ceil-h);background:linear-gradient(#0b0a05,#17150c 58%,#221f11)}
+    .wall{position:absolute;inset:var(--ceil-h) 0 var(--floor-h);overflow:hidden;background-color:#b79c4e;background-image:repeating-linear-gradient(90deg,rgba(0,0,0,.14) 0 1px,rgba(255,240,175,.06) 1px 3px,transparent 3px 82px)}
+    .floor{position:absolute;inset:auto 0 0;height:var(--floor-h);background:linear-gradient(180deg,#35331f,#1e1c11 44%,#0e0e08)}
+    .hero-copy{position:relative;z-index:3;min-height:100svh;width:min(1240px,100%);margin:0 auto;--lift:clamp(48px,8.5vh,96px);padding:calc(var(--ceil-h) + 4vh) clamp(20px,5vw,70px) calc(var(--floor-h) + var(--lift));display:grid;align-content:end}
+    .hero-text{container-type:inline-size}
+    h1.wall-type{font-family:'Archivo','Helvetica Neue',Arial,sans-serif;font-weight:800;font-stretch:112%;letter-spacing:-.022em;line-height:.86;color:#241e0c;text-transform:uppercase;font-size:clamp(42px,6.9vw,112px);font-size:min(11.2cqi,112px);opacity:.9}
+    h1.wall-type span{display:block}
+    .github-link{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));z-index:30;display:none;width:34px;height:34px;align-items:center;justify-content:center;color:rgba(226,210,150,.42)}
     .github-link svg{width:20px;height:20px}
-    body:has(.menu-screen:not(.hidden)) .github-link{display:flex}
   </style>
   <link rel="preload" href="/src/style.css" as="style" onload="this.onload=null;this.rel='stylesheet'" />
   <noscript><link rel="stylesheet" href="/src/style.css" /></noscript>
@@ -179,105 +273,312 @@
       </div>
     </div>
 
-    <!-- Landing page / start screen -->
-    <div id="start-screen" class="overlay menu-screen landing">
-      <header class="landing-hero">
-        <h1 class="game-title">THE BACKROOMS</h1>
-        <p class="tagline">you noclipped out of reality</p>
-        <div class="badges">
-          <span class="badge">100% free</span>
-          <span class="badge">no download</span>
-          <span class="badge">no sign-up</span>
-          <span class="badge">plays in your browser</span>
+    <!-- ================================================ Landing / start ==== -->
+    <!-- A room, drawn in elevation: ceiling, wall, floor. The title is painted
+         on the wall and the two ways in are doors standing on the carpet. -->
+    <div id="start-screen" class="overlay screen landing">
+      <section class="hero">
+        <div class="ceiling"><div class="tube"></div></div>
+
+        <div class="wall">
+          <div class="damp"></div>
+          <div class="vent"></div>
+          <div class="wall-light"></div>
         </div>
-        <p class="objective-pitch">six levels down · every floor charges a different price · fall back into the world</p>
-        <button id="btn-continue" class="menu-btn big hidden">CONTINUE</button>
-        <button id="btn-start" class="menu-btn big">DESCEND — PLAY FREE</button>
-        <p id="landing-records" class="warn hidden"></p>
-        <p class="warn">
-          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M12 3a8 8 0 0 0-8 8v6a2.2 2.2 0 0 0 2.2 2.2H8V13H6.2v-2a5.8 5.8 0 0 1 11.6 0v2H16v6.2h1.8A2.2 2.2 0 0 0 20 17v-6a8 8 0 0 0-8-8z"/></svg>
-          headphones strongly recommended
+
+        <div class="hero-copy">
+          <div class="hero-text">
+            <p class="slate stencil">Level 0 · entry point · no way but down</p>
+            <h1 class="wall-type painted"><span>The</span><span class="lo">Backrooms</span></h1>
+            <p class="wall-sub stencil">you noclipped out of reality</p>
+            <ul class="stamps">
+              <li>100% free</li>
+              <li>no download</li>
+              <li>no install</li>
+              <li>no sign-up</li>
+              <li>plays in your browser</li>
+            </ul>
+            <p id="landing-records" class="hidden"></p>
+            <p class="fineprint stencil">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M12 3a8 8 0 0 0-8 8v6a2.2 2.2 0 0 0 2.2 2.2H8V13H6.2v-2a5.8 5.8 0 0 1 11.6 0v2H16v6.2h1.8A2.2 2.2 0 0 0 20 17v-6a8 8 0 0 0-8-8z"/></svg>
+              headphones strongly recommended
+            </p>
+          </div>
+
+          <div class="doors">
+            <button id="btn-continue" class="door door-continue hidden" type="button">
+              <span class="door-slab">
+                <span class="door-label">Continue</span>
+                <span class="door-meta">the run you left open</span>
+              </span>
+            </button>
+            <button id="btn-start" class="door door-start" type="button">
+              <span class="door-slab">
+                <span class="door-label">Descend</span>
+                <span class="door-meta">play free · no download</span>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div class="floor"></div>
+
+        <p class="deeper stencil" aria-hidden="true">
+          keep going
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v15M5 13l7 7 7-7"/></svg>
         </p>
-      </header>
+        <div class="tape"></div>
+        <div class="grain"></div>
+        <p class="tape-status"><span class="rec"></span><span>rec</span><span class="tape-time">00:00:00:00</span><span>lvl 0</span></p>
+      </section>
 
-      <main class="landing-main">
-        <section class="landing-intro">
-          <h2>A free survival horror game — right in your browser</h2>
+      <!-- Past the light. Everything a reader (or a crawler) needs is down
+           here, on the paperwork somebody taped to the wall. -->
+      <main class="brief">
+        <article class="sheet">
+          <span class="tape-strip l"></span>
+          <span class="tape-strip r"></span>
+          <div class="sheet-head">
+            <h2>A free survival horror game — right in your browser</h2>
+            <span class="ref">Form 0-A · site briefing</span>
+          </div>
           <p>
-            The Backrooms is a first-person survival horror game that runs entirely in your web browser.
-            There is nothing to download, nothing to install and no account to create:
-            press play and you are inside the endless yellow halls. Free, instant, on any modern computer.
+            The Backrooms is a first-person survival horror game that runs entirely in your web
+            browser. Nothing to download, nothing to install, no account and no ads: press play
+            and you are standing in the endless yellow halls. It is free, it starts in seconds,
+            and it works on any modern computer or phone.
           </p>
-        </section>
+          <p>
+            A run is a descent. Six floors, and you start on the first. Every one of them is
+            generated from the seed of your run, endless in all four horizontal directions, and
+            every one charges a different price to let you through to the next. You will get
+            thirsty. Your torch will run down. Something will be following you. The bottom floor
+            is the only one with no way down — it has a way out.
+          </p>
 
-        <div class="feature-grid">
-          <section class="feature">
-            <h3>An infinite maze</h3>
-            <p>Every run is procedurally generated — mono-yellow office halls, pitch-black pipe tunnels, the flooded poolrooms. No two descents are ever the same.</p>
-          </section>
-          <section class="feature">
-            <h3>You are being hunted</h3>
-            <p>Four entities stalk the levels. They follow out of sight, freeze when you spot them, slip behind corners — and strike the moment you look away.</p>
-          </section>
-          <section class="feature">
-            <h3>Scavenge &amp; survive</h3>
-            <p>You start with a torch and a receiver. Find weapons, batteries and ammunition, carry water in a bottle, and decide when to fight and when to run.</p>
-          </section>
-          <section class="feature">
-            <h3>There is a way out</h3>
-            <p>Three fuses are buried in the levels. Bring them to the exit portal, step through, and fall out of the Backrooms into the sky above the real world. Leave early with fewer fuses if your nerve goes.</p>
-          </section>
-          <section class="feature">
-            <h3>Sound is everything</h3>
-            <p>Every noise is synthesized live: the fluorescent hum, your heartbeat, and the whispers that mean something is close. Positional 3D audio — trust your ears.</p>
-          </section>
-        </div>
+          <div class="levels">
+            <section class="level">
+              <h3>Level 0</h3>
+              <p class="level-tag">the lobby · start here</p>
+              <p>Mono-yellow wallpaper, damp carpet and fluorescent hum in every direction. Somewhere out in it the wall has gone soft. Lean on it long enough and it gives.</p>
+            </section>
+            <section class="level">
+              <h3>Level 1</h3>
+              <p class="level-tag">front parking · one down</p>
+              <p>The car park under a supermarket that was never built. The service ramp is behind a roller shutter, and the shutter only wakes up with four car alarms screaming at once.</p>
+            </section>
+            <section class="level">
+              <h3>Level 37</h3>
+              <p class="level-tag">the poolrooms · two down</p>
+              <p>Warm, tiled, bright and endless — down here the dread is not the dark. The way on is the drain at the bottom of the deep pool, so first you find the valve and flood the floor you are standing on.</p>
+            </section>
+            <section class="level">
+              <h3>Level 7</h3>
+              <p class="level-tag">thalassophobia · three down</p>
+              <p>Black water under a nine-metre ceiling, and you arrive by falling into it. The hatch is bolted five metres under. You get there one lungful at a time.</p>
+            </section>
+            <section class="level">
+              <h3>Level 2</h3>
+              <p class="level-tag">pipe dreams · four down</p>
+              <p>Low maintenance tunnels, sodium light, dust and cable. The stairwell door has a keypad on it, and the four digits are written on a wall somewhere else entirely.</p>
+            </section>
+            <section class="level">
+              <h3>Level !</h3>
+              <p class="level-tag">run for your life · bottom</p>
+              <p>The lobby again, remembered wrong and standing in water. Nothing here goes further down. Three fuses, one portal, and a fall back out into the sky over the real world.</p>
+            </section>
+          </div>
+        </article>
 
-        <section class="landing-controls controls-help">
-          <h3>Controls</h3>
-          <div class="mouse-only">
-            <p>WASD move · Mouse look · Space jump · C/Ctrl crouch · Shift run</p>
-            <p>E interact / fill bottle · LMB attack · RMB block/aim/drink · TAB inventory · G drop held item · F torch · R switch receiver</p>
-            <p>1–9/0 quick equip · mouse wheel cycle items</p>
+        <article class="sheet">
+          <span class="tape-strip r"></span>
+          <div class="sheet-head">
+            <h2>Four entities hunt these floors</h2>
+            <span class="ref">Form 0-B · entity log</span>
           </div>
-          <div class="touch-only">
-            <p>Left thumb steers, right thumb looks. Push the stick all the way out to run.</p>
-            <p>USE takes and opens things · the big button swings what you are holding · JUMP and CROUCH sit beside it.</p>
-            <p>The buttons down the right edge — the bag, the torch, dropping what you hold, re-aiming the receiver — appear as soon as they have something to do. Tap the bar along the bottom to change hands.</p>
+          <p>
+            None of them walks a patrol route. Each of the four has its own idea of how to reach
+            you, and they share one instinct: close the distance while you are looking somewhere
+            else.
+          </p>
+
+          <div class="clauses">
+            <section class="clause">
+              <span class="no">01</span>
+              <h3>Smiler</h3>
+              <p>A smear of darkness with a face floating in it. It keeps to the unlit rooms and works up its nerve from a distance, and the grin gets wider the longer you look at it. It has no time at all for your torch.</p>
+            </section>
+            <section class="clause">
+              <span class="no">02</span>
+              <h3>Skin-Stealer</h3>
+              <p>Slow, starved and wearing somebody. It shadows you from cover a corner or two behind and will not commit until it is close enough to reach you. It takes a great deal of killing.</p>
+            </section>
+            <section class="clause">
+              <span class="no">03</span>
+              <h3>Hound</h3>
+              <p>Eyeless, four-legged and faster than you are. Where there is one there are usually more, and the moment one of them decides, the rest come round the sides.</p>
+            </section>
+            <section class="clause">
+              <span class="no">04</span>
+              <h3>Partygoer</h3>
+              <p>It never hides. It comes at you across open floor, hat crooked and a dead balloon in one hand — and it only breaks into a run once you have turned your back.</p>
+            </section>
           </div>
-        </section>
+
+          <div class="sheet-note">
+            <h3>And what you have</h3>
+            <p>
+              You start with a torch and a field receiver, and nothing else. The rest is scavenged
+              off the floors: a metal pipe, a pipe wrench, a kitchen knife, a fire extinguisher,
+              a pistol and the box of 9 mm it runs on. Batteries keep the torch alive. A glass
+              bottle holds water, and thirst is what kills the players who were careful about
+              everything else. The bag has a weight limit, so every pickup is really a decision
+              about what you put back down.
+            </p>
+          </div>
+        </article>
+
+        <article class="sheet sheet-ops">
+          <span class="tape-strip l"></span>
+          <div class="sheet-head">
+            <h2>Operating instructions</h2>
+            <span class="ref">Posted in every room</span>
+          </div>
+          <dl class="mouse-only">
+            <div class="ops-row"><dt>Move</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump or swim up · <kbd>C</kbd> or <kbd>Ctrl</kbd> crouch or swim down</dd></div>
+            <div class="ops-row"><dt>Look</dt><dd>Mouse. Click the page once to hand it over.</dd></div>
+            <div class="ops-row"><dt>Hands</dt><dd><kbd>LMB</kbd> attack · <kbd>RMB</kbd> block, aim or drink · <kbd>E</kbd> interact, pick up and fill your bottle</dd></div>
+            <div class="ops-row"><dt>Kit</dt><dd><kbd>Tab</kbd> inventory · <kbd>1</kbd>–<kbd>0</kbd> or the wheel to equip · <kbd>G</kbd> drop what you hold · <kbd>F</kbd> torch · <kbd>R</kbd> re-aim the receiver</dd></div>
+            <div class="ops-row"><dt>Stop</dt><dd><kbd>Esc</kbd> pauses and saves the run.</dd></div>
+          </dl>
+          <dl class="touch-only">
+            <div class="ops-row"><dt>Move</dt><dd>Left thumb steers. Push the stick all the way out to run.</dd></div>
+            <div class="ops-row"><dt>Look</dt><dd>Right thumb, anywhere on that half of the screen.</dd></div>
+            <div class="ops-row"><dt>Hands</dt><dd>USE takes and opens things. The big button swings whatever you are holding; JUMP and CROUCH sit beside it.</dd></div>
+            <div class="ops-row"><dt>Kit</dt><dd>The buttons down the right edge — the bag, the torch, dropping what you hold, re-aiming the receiver — appear as soon as they have something to do. Tap the bar along the bottom to change hands.</dd></div>
+            <div class="ops-row"><dt>Stop</dt><dd>PAUSE, top right. It saves the run.</dd></div>
+          </dl>
+        </article>
+
+        <article class="sheet sheet-faq">
+          <span class="tape-strip l"></span>
+          <span class="tape-strip r"></span>
+          <div class="sheet-head">
+            <h2>Frequently asked questions</h2>
+            <span class="ref">Form 0-C · enquiries</span>
+          </div>
+          <dl>
+            <div class="qa">
+              <dt>What are the Backrooms?</dt>
+              <dd>An internet horror legend about noclipping out of reality and landing in an endless off-yellow office — damp carpet, buzzing fluorescent lights, about six hundred million square miles of empty rooms, and something in there with you. This game is one playable version of it, not an official adaptation of any other Backrooms project.</dd>
+            </div>
+            <div class="qa">
+              <dt>Is The Backrooms free to play?</dt>
+              <dd>Yes, completely. There is no purchase, no subscription, no sign-up and no advertising. The source code is public on GitHub under the GPL-3.0 licence.</dd>
+            </div>
+            <div class="qa">
+              <dt>Do I have to download or install anything?</dt>
+              <dd>No. It is a WebGL game and it runs in the browser tab you are reading this in. Chrome, Firefox, Edge and Safari all work, on Windows, macOS, Linux, Android and iOS.</dd>
+            </div>
+            <div class="qa">
+              <dt>Can I play the Backrooms on a phone?</dt>
+              <dd>Yes. On a touchscreen the game swaps to an on-screen rig: a stick under your left thumb, look with the right, and labelled buttons that appear only when the thing in your hand can actually use them.</dd>
+            </div>
+            <div class="qa">
+              <dt>How many levels are there?</dt>
+              <dd>Six: Level 0, Level 1, Level 37, Level 7, Level 2 and Level !. Each one is endless in every horizontal direction and built fresh from the seed of your run, so no two descents are the same maze.</dd>
+            </div>
+            <div class="qa">
+              <dt>How do you escape the Backrooms?</dt>
+              <dd>Get to the bottom floor, find the three fuses scattered across it, carry them to the exit portal and step through. You can leave with fewer than three if your nerve goes — the door still opens, just barely.</dd>
+            </div>
+            <div class="qa">
+              <dt>Does the game save my progress?</dt>
+              <dd>Pausing writes a checkpoint into your own browser, so you can close the tab and pick the run up later. Dying clears it: a checkpoint is for putting the game down, not for a second try at the same corner. Records stay local too. The only thing the game sends is an anonymous count of started and engaged runs with a country, no IP and no identifier, and <code>?telemetry=off</code> switches even that off.</dd>
+            </div>
+            <div class="qa">
+              <dt>Can I replay the same maze?</dt>
+              <dd>Yes. Every run has a seed and it is in the address bar — <code>?seed=1234</code>. Send someone that link and they get your maze, your fuses and your exit, exactly where you found them.</dd>
+            </div>
+          </dl>
+        </article>
       </main>
 
-      <footer class="landing-footer">
+      <footer class="colophon">
         <p>The Backrooms — a free WebGL horror game. No download · no install · no ads · works in Chrome, Firefox, Edge and Safari, on desktop and on mobile.</p>
       </footer>
     </div>
 
-    <!-- Pause menu -->
-    <div id="pause-screen" class="overlay menu-screen hidden">
-      <h1 class="game-title small">PAUSED</h1>
-      <button id="btn-resume" class="menu-btn">RESUME</button>
-      <button id="btn-save-quit" class="menu-btn">SAVE &amp; QUIT</button>
-      <button id="btn-restart" class="menu-btn ghost">RESTART — DISCARD THIS RUN</button>
-      <p id="pause-saved" class="warn"></p>
+    <!-- ============================================================ Paused == -->
+    <!-- The frame you stopped on is still underneath: this dims it, it does
+         not replace it. -->
+    <div id="pause-screen" class="overlay screen hidden">
+      <div class="card">
+        <h1 class="verdict">Paused</h1>
+        <dl class="record" id="pause-record"></dl>
+        <div class="acts">
+          <button id="btn-resume" class="act" type="button">
+            <span class="glyph"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg></span>
+            Go back in
+          </button>
+          <button id="btn-save-quit" class="act" type="button">
+            <span class="glyph"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M4 4h12l4 4v12H4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 4h7v5H8z"/></svg></span>
+            Save &amp; step out
+          </button>
+          <button id="btn-restart" class="act act-quiet" type="button">
+            <span class="glyph"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg></span>
+            Start over — throw this run away
+          </button>
+        </div>
+        <p id="pause-saved" class="note"></p>
+      </div>
+      <div class="tracking"></div>
+      <div class="tape"></div>
+      <div class="grain"></div>
+      <p class="tape-status"><span class="rec"></span><span>pause</span><span class="tape-time">00:00:00:00</span><span id="pause-level">lvl 0</span></p>
     </div>
 
-    <!-- Game over -->
-    <div id="gameover-screen" class="overlay menu-screen hidden">
-      <h1 class="game-title red">YOU DIED</h1>
-      <p id="gameover-cause" class="tagline"></p>
-      <p id="gameover-stats" class="tagline"></p>
-      <button id="btn-respawn" class="menu-btn">WAKE UP AGAIN</button>
+    <!-- ========================================================== You died == -->
+    <div id="gameover-screen" class="overlay screen hidden">
+      <div class="card">
+        <h1 class="verdict">You died</h1>
+        <dl class="record" id="gameover-record"></dl>
+        <div class="acts">
+          <button id="btn-respawn" class="act" type="button">
+            <span class="glyph"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg></span>
+            Wake up again
+          </button>
+        </div>
+      </div>
+      <div class="tape"></div>
+      <div class="grain"></div>
+      <p class="tape-status"><span class="rec"></span><span>signal lost</span><span class="tape-time">00:00:00:00</span></p>
     </div>
 
-    <!-- Escaped -->
-    <div id="escape-screen" class="overlay menu-screen hidden">
-      <h1 class="game-title out">YOU ARE OUT</h1>
-      <p id="escape-cause" class="tagline"></p>
-      <p id="escape-stats" class="tagline"></p>
-      <div id="escape-records"></div>
-      <button id="btn-again" class="menu-btn">DESCEND AGAIN</button>
-      <button id="btn-same-seed" class="menu-btn ghost">SAME SEED</button>
+    <!-- ======================================================= You are out == -->
+    <!-- The only screen in the game with a sky in it. -->
+    <div id="escape-screen" class="overlay screen hidden">
+      <div class="card">
+        <h1 class="verdict">You are out</h1>
+        <p id="escape-cause" class="note"></p>
+        <div class="slip">
+          <dl class="record" id="escape-record"></dl>
+          <div id="escape-records"></div>
+        </div>
+        <div class="acts">
+          <button id="btn-again" class="act" type="button">
+            <span class="glyph"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 4v15M5 13l7 7 7-7"/></svg></span>
+            Descend again
+          </button>
+          <button id="btn-same-seed" class="act act-quiet" type="button">
+            <span class="glyph"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg></span>
+            The same maze again
+          </button>
+        </div>
+      </div>
+      <div class="tape"></div>
+      <div class="grain"></div>
+      <p class="tape-status"><span class="rec"></span><span>exit</span><span class="tape-time">00:00:00:00</span></p>
     </div>
 
     <a

@@ -34,7 +34,7 @@ import { Menus } from '../ui/Menus';
 import { TouchControls } from '../ui/TouchControls';
 import { DEV_HACKS } from './dev';
 import { Input } from './Input';
-import { loadRecords, noteDepth, noteEscape, noteLevel, noteRunStarted } from './Records';
+import { noteDepth, noteEscape, noteLevel, noteRunStarted } from './Records';
 import { clearSave, DescentState, loadSave, SaveGame, writeSave } from './Save';
 import { Telemetry } from './Telemetry';
 import { getRenderQuality } from '../rendering/Quality';
@@ -227,7 +227,6 @@ export class Game {
       if (this.state === 'playing' || this.state === 'paused') this.saveRun();
     });
 
-    this.menus.showRecords(loadRecords());
     this.menus.showStart();
     requestAnimationFrame(() => this.loop());
   }
@@ -473,7 +472,7 @@ export class Game {
     this.expectUnlock = true;
     this.input.exitPointerLock();
     this.touch.setActive(false);
-    this.menus.showPause(true, saved);
+    this.menus.showPause(true, saved, this.depth, this.survivalTime);
     void this.audio.suspend();
   }
 

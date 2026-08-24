@@ -1,7 +1,8 @@
 import { DEV_HACKS } from './core/dev';
-import { formatTime } from './core/Records';
+import { formatTime, loadRecords } from './core/Records';
 import { loadSave } from './core/Save';
 import { watchForTouch } from './ui/controls';
+import { runLandingTape } from './ui/tape';
 import { defForDepth } from './world/Biomes';
 
 // Before the first pixel: the landing page has to describe thumbs to a phone
@@ -31,13 +32,32 @@ const continueButton = document.getElementById('btn-continue') as HTMLButtonElem
 let game: Game | null = null;
 let loading = false;
 
+/** A door says two things: what it is, and what is on the other side of it. */
+function labelDoor(door: HTMLButtonElement, label: string, meta?: string): void {
+  door.querySelector('.door-label')!.textContent = label;
+  if (meta !== undefined) door.querySelector('.door-meta')!.textContent = meta;
+}
+
+runLandingTape();
+
+// Whoever was here last left a mark on the wall. It was you.
+const records = loadRecords();
+if (records.runs > 0) {
+  const line = document.getElementById('landing-records')!;
+  line.textContent = records.escapes > 0
+    ? `${records.escapes} escape${records.escapes > 1 ? 's' : ''} · ${records.runs} descents · best ${
+      records.bestSeconds === null ? '—' : formatTime(records.bestSeconds)}`
+    : `${records.runs} descent${records.runs > 1 ? 's' : ''} · deepest ${
+      defForDepth(records.deepestLevel).name} · never made it out`;
+  line.classList.remove('hidden');
+}
+
 if (canContinue) {
   // The floor you're standing on says more about a run than the clock does.
   const floor = defForDepth(save!.depth ?? 0).name;
-  continueButton.textContent =
-    `CONTINUE — ${floor} · ${formatTime(save!.survivalTime)} IN`;
+  labelDoor(continueButton, 'Continue', `${floor} · ${formatTime(save!.survivalTime)} in`);
   continueButton.classList.remove('hidden');
-  startButton.textContent = 'START OVER';
+  labelDoor(startButton, 'Start over', 'a maze you have not seen');
 }
 
 /**
@@ -50,8 +70,8 @@ async function bootGame(resume: boolean, trustedStart: boolean): Promise<void> {
   startButton.disabled = true;
   continueButton.disabled = true;
   const button = resume ? continueButton : startButton;
-  const label = button.textContent;
-  button.textContent = 'DESCENDING…';
+  const label = button.querySelector('.door-label')!.textContent ?? '';
+  labelDoor(button, 'Descending…');
 
   // starting over on top of a save means a new maze, not the one you gave up on
   if (!resume && canContinue && !askedForSeed) setSeed((Math.random() * 0xffffffff) >>> 0);
@@ -67,7 +87,7 @@ async function bootGame(resume: boolean, trustedStart: boolean): Promise<void> {
     console.error('Could not start the game', error);
     startButton.disabled = false;
     continueButton.disabled = false;
-    button.textContent = resume ? label : 'TRY AGAIN';
+    labelDoor(button, resume ? label : 'Try again');
     loading = false;
   }
 }

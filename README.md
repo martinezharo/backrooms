@@ -24,9 +24,22 @@ The systems that define a run are:
   ones you have nothing to use. Use `?touch=1` or `?touch=0` to force touch mode
   on or off.
 
+The four screens you are not playing on — the landing page, the pause, the
+death and the escape — are one design in [`src/menus.css`](src/menus.css), and
+it is a place rather than a menu. The landing is a room drawn in elevation:
+damp mono-yellow wall under a fluorescent tube, skirting, carpet, and two
+doors standing on it that are the only buttons on the page. Everything a
+reader or a crawler needs is on the paperwork taped to the wall further down,
+past the light. The pause holds the frame the game stopped on instead of
+covering it, death puts the tube out, and the escape screen throws the whole
+palette away for daylight — the one screen in the game that is not yellow. A
+grain-and-scanline layer with a running timecode sits over all four, so they
+read as footage of the same descent.
+
 World geometry and textures are generated in code. Audio combines WebAudio
 synthesis with recorded ambience, footsteps, impacts, and other clips; see the
-[audio credits](src/audio/clips/CREDITS.md).
+[audio credits](src/audio/clips/CREDITS.md). The interface uses one self-hosted
+web font; see the [font credits](public/fonts/CREDITS.md).
 
 ## Development
 

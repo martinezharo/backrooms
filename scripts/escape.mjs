@@ -76,7 +76,7 @@ await page.screenshot({ path: `${out}/escape_3_screen.png` });
 const end = await page.evaluate(() => ({
   state: window.__game.state,
   shown: !document.getElementById('escape-screen').classList.contains('hidden'),
-  stats: document.getElementById('escape-stats').textContent,
+  stats: document.getElementById('escape-record').textContent.replace(/\s+/g, ' ').trim(),
 }));
 console.log('end:', JSON.stringify(end));
 console.log(errors.length ? `errors:\n${errors.join('\n')}` : 'no console errors');
