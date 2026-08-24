@@ -1494,7 +1494,7 @@ export class Game {
    * Dev-only keys, compiled out of a production build with the rest of
    * `DEV_HACKS`. Nothing here is part of the game:
    *
-   *   PageDown / PageUp   one floor down / up, skipping the descent puzzle
+   *   PageDown / PageUp   one floor down / up; PageDown on the last jumps to the exit
    *   Backslash           jump to this floor's way down
    *   Shift+Backslash     jump to the thing that unlocks it, if it has one
    *
@@ -1505,6 +1505,11 @@ export class Game {
     let target = -1;
     if (this.input.pressed('PageDown')) target = this.depth + 1;
     if (this.input.pressed('PageUp')) target = this.depth - 1;
+    if (target > LAST_DEPTH) {
+      this.teleportToExit();
+      this.flashMessage('DEV — THE EXIT');
+      return;
+    }
     if (target >= 0 && target <= LAST_DEPTH && target !== this.depth) {
       this.teleportToDepth(target);
       this.flashMessage(`DEV — ${defForDepth(target).name}`);
