@@ -14,7 +14,8 @@ import { BOTTLE_CAPACITY, CELLS, CELL, CHUNK, WALL_THICKNESS } from '../core/con
 import { chunkRng, hash3, mulberry32, randInt, Rng } from '../core/rng';
 import { GRAFFITI_COUNT } from '../rendering/Textures';
 import { BiomeId, BIOMES, biomeForDepth, LAST_DEPTH } from './Biomes';
-import { DescentSpot, SubSpot, isDescentChunk, subSiteHere } from './Descent';
+import { BASIN_FLOOR, DescentSpot, SubSpot, descentCell, isDescentChunk, subSiteHere } from './Descent';
+import { shaftFor } from './Slabs';
 import { fuseSiteAt, isExitChunk, objectiveLayout } from './Objective';
 
 export interface LightFixture {
@@ -79,11 +80,26 @@ export interface PortalSpot {
 /** solid[k] === SOLID_PROP: blocked, but something else is already drawn there. */
 export const SOLID_PROP = 2;
 
+/**
+ * hole[k] flags: a cell the slab is missing. A connection between two floors
+ * needs the upper one to have no floor where the hole is and the lower one to
+ * have no ceiling, and neither of those is expressible as a height.
+ */
+export const HOLE_FLOOR = 1;
+export const HOLE_CEIL = 2;
+
 export interface ChunkData {
   cx: number;
   cz: number;
   depth: number;
   biome: BiomeId;
+  /**
+   * World Y of this chunk's slab ground plane — what "the floor is at zero"
+   * used to mean. Generation works in slab-local heights and bakeSlab shifts
+   * everything absolute by this, so anything reading a height back out has to
+   * measure from here rather than from zero.
+   */
+  base: number;
   ceil: number;
   waterY: number | null;
   wallsV: Uint8Array;
@@ -92,6 +108,7 @@ export interface ChunkData {
   floor: Float32Array;     // per-cell floor height
   ceilDrop: Float32Array;  // per-cell soffit: how far the ceiling hangs below c.ceil
   water: Uint8Array;       // per-cell water flag
+  hole: Uint8Array;        // per-cell HOLE_FLOOR / HOLE_CEIL bits
   lights: LightFixture[];
   taps: TapSpot[];
   graffiti: GraffitiSpot[];
@@ -375,6 +392,7 @@ export function generateChunk(seed: number, depth: number, cx: number, cz: numbe
 
   const c: ChunkData = {
     cx, cz, depth, biome,
+    base: 0,
     ceil: def.ceiling,
     waterY: def.waterLevel,
     wallsV: new Uint8Array((N + 1) * N),
@@ -383,6 +401,7 @@ export function generateChunk(seed: number, depth: number, cx: number, cz: numbe
     floor: new Float32Array(N * N),
     ceilDrop: new Float32Array(N * N),
     water: new Uint8Array(N * N),
+    hole: new Uint8Array(N * N),
     lights: [],
     taps: [],
     graffiti: [],
@@ -524,12 +543,23 @@ export function generateChunk(seed: number, depth: number, cx: number, cz: numbe
   // ---- the way down (carved before connectivity so it never seals itself) ----
   let siteCell: { i: number; j: number } | null = null;
   if (isDescentChunk(seed, depth, cx, cz) && depth < LAST_DEPTH) {
-    const si = randInt(rng, 6, 10);
-    // The car park's service ramp runs most of a chunk before it bottoms out,
-    // so its shutter has to stand well into the +z half to leave room behind it.
-    const sj = biome === BiomeId.Level1 ? randInt(rng, 11, 14) : randInt(rng, 6, 10);
+    const { i: si, j: sj } = descentCell(seed, depth);
     siteCell = { i: si, j: sj };
     buildDescentSite(c, si, sj, cellCenter);
+  }
+
+  // The other half of a connection: this floor is the one underneath a shaft,
+  // and its ceiling has to be open where the pipe comes through.
+  const above = shaftFor(seed, depth - 1);
+  if (above && above.lower === depth
+      && Math.floor(above.x / CHUNK) === cx && Math.floor(above.z / CHUNK) === cz) {
+    const hi = above.gi - cx * N;
+    const hj = above.gj - cz * N;
+    if (hi >= 0 && hi < N && hj >= 0 && hj < N) {
+      const k = idx(hi, hj);
+      c.hole[k] |= HOLE_CEIL;
+      c.solid[k] = 0;
+    }
   }
   const sub = subSiteHere(seed, depth, cx, cz);
   if (sub) {
@@ -1035,7 +1065,7 @@ function buildDescentSite(
       carveApron(c, si, sj, 3);
       for (let dj = -1; dj <= 1; dj++) {
         for (let di = -1; di <= 1; di++) {
-          c.floor[idx(si + di, sj + dj)] = -4.6;
+          c.floor[idx(si + di, sj + dj)] = BASIN_FLOOR;
         }
       }
       // The ring of cells around it steps down once, so the rim reads as a
@@ -1047,9 +1077,12 @@ function buildDescentSite(
         }
       }
       for (let k = 0; k < N * N; k++) c.water[k] = 1;
+      // the drain is a hole, not a plughole: the basin has no floor in that
+      // cell at all, and what you see there is the pipe going down
+      c.hole[idx(si, sj)] |= HOLE_FLOOR;
       c.descent = {
         kind: 'drain',
-        x: sxw, y: -4.6, z: szw,
+        x: sxw, y: BASIN_FLOOR, z: szw,
         angle: 0,
         tx: sxw, ty: -4.0, tz: szw,
       };

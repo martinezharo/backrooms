@@ -125,7 +125,7 @@ export class Spawner {
       if (s && this.world.lineBlocked(s.x, s.z, playerPos.x, playerPos.z)) spot = s;
     }
     if (!spot) return;
-    const biome = this.world.biomeAt(spot.x, spot.z).id;
+    const biome = this.world.biomeAt(spot.y).id;
     const table = WEIGHTS[biome];
     if (!table.length) return; // a floor with nothing living on it
     let r = Math.random();

@@ -114,7 +114,7 @@ export class Lighting {
 
     // ambient follows the player's biome — eased over ~1s of wall clock, not
     // of frames, so a slow machine crosses a biome border at the same pace
-    const biome = this.world.biomeAt(px, pz);
+    const biome = this.world.biomeAt(camera.position.y);
     const ease = Math.min(1, dt * 2.4);
     _ambientColor.setHex(biome.ambientColor);
     this.ambient.color.lerp(_ambientColor, ease);
@@ -180,7 +180,7 @@ export class Lighting {
       const floorY = this.world.groundHeight(px + dir.x * 1.5, pz + dir.z * 1.5, 0.3, camera.position.y, 4);
       subject = Math.min(subject, (camera.position.y - floorY) / -dir.y);
     } else if (dir.y > 0.05) {
-      const ceilY = this.world.ceilHeight(px + dir.x * 1.5, pz + dir.z * 1.5);
+      const ceilY = this.world.ceilHeight(px + dir.x * 1.5, pz + dir.z * 1.5, camera.position.y);
       if (isFinite(ceilY)) subject = Math.min(subject, (ceilY - camera.position.y) / dir.y);
     }
     // keep the lit subject's apparent brightness roughly what a mid-range wall

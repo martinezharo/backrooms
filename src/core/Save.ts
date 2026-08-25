@@ -10,7 +10,11 @@ import type { ItemSnapshot } from '../items/Items';
 const KEY = 'backrooms.save.v1';
 // 2: the world became a stack of levels instead of a patchwork of biomes, so
 // every v1 save describes a floor plan that no longer exists.
-const VERSION = 2;
+// 3: floors stopped sharing y = 0 and were dealt slabs of world Y, so a v2
+// save puts the player kilometres above the level it names. The way down also
+// moved: which cell of its chunk it stands in is now hashed rather than drawn
+// from the chunk's random stream, so v2 spawn ids point at the wrong props.
+const VERSION = 3;
 
 export interface PlayerState {
   x: number; y: number; z: number;

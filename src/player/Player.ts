@@ -65,8 +65,8 @@ export class Player {
     this.camera.rotation.order = 'YXZ';
   }
 
-  reset(x: number, z: number): void {
-    this.position.set(x, 0, z);
+  reset(x: number, z: number, y = 0): void {
+    this.position.set(x, y, z);
     this.velocity.set(0, 0, 0);
     this.yaw = Math.random() * Math.PI * 2;
     this.pitch = 0;
@@ -103,7 +103,7 @@ export class Player {
    * all share one neutral step rather than each getting a character of its own.
    */
   private surfaceAt(world: World): 'carpet' | 'hard' {
-    const a = world.biomeAt(this.position.x, this.position.z).ambienceId;
+    const a = world.biomeAt(this.position.y).ambienceId;
     return a === 'hum' || a === 'wrong' ? 'carpet' : 'hard';
   }
 
@@ -118,12 +118,12 @@ export class Player {
     this.crouching = wantCrouch && !this.swimming;
     const targetHeight = this.crouching ? PLAYER_CROUCH_HEIGHT : PLAYER_HEIGHT;
     // don't stand up into a ceiling
-    const ceil = world.ceilHeight(this.position.x, this.position.z);
+    const ceil = world.ceilHeight(this.position.x, this.position.z, this.position.y);
     const allowedHeight = Math.min(targetHeight, ceil - this.position.y - 0.05);
     this.height += (Math.max(PLAYER_CROUCH_HEIGHT, allowedHeight) - this.height) * Math.min(1, dt * 10);
 
     // ---- water state ----
-    const surface = world.waterSurfaceAt(this.position.x, this.position.z);
+    const surface = world.waterSurfaceAt(this.position.x, this.position.z, this.position.y);
     const floorHere = world.groundHeight(this.position.x, this.position.z, PLAYER_RADIUS, this.position.y, MAX_STEP);
     this.inWater = surface !== null && this.position.y < surface - 0.25;
     const deepWater = surface !== null && surface - floorHere > 1.1;
@@ -218,7 +218,7 @@ export class Player {
     } else {
       this.grounded = false;
     }
-    const ceilY = world.ceilHeight(this.position.x, this.position.z);
+    const ceilY = world.ceilHeight(this.position.x, this.position.z, this.position.y);
     if (this.position.y + this.height > ceilY) {
       this.position.y = ceilY - this.height;
       if (this.velocity.y > 0) this.velocity.y = 0;
@@ -278,7 +278,7 @@ export class Player {
       for (const dist of [PLAYER_RADIUS + 0.35, PLAYER_RADIUS + 0.85]) {
         const gi = Math.floor((this.position.x + ax * dist) / CELL);
         const gj = Math.floor((this.position.z + az * dist) / CELL);
-        const f = world.floorAt(gi, gj);
+        const f = world.floorAt(gi, gj, this.position.y);
         if (isFinite(f) && f > this.position.y + MAX_STEP && f <= surface + 0.9) return f;
       }
     }

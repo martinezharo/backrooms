@@ -111,6 +111,32 @@ export function descentLayout(seed: number, depth: number): DescentLayout {
   return layout;
 }
 
+/**
+ * How far Level 37's deep end drops below its walkable floor. The drain sits on
+ * the bottom of it, and the pipe under the drain starts there, so the two have
+ * to agree — and the floor underneath has to be able to work it out without
+ * generating Level 37 first.
+ */
+export const BASIN_FLOOR = -4.6;
+
+/**
+ * Which cell of its chunk a floor's way down stands in.
+ *
+ * Pure in (seed, depth) rather than drawn from the chunk's random stream,
+ * because the floor below needs to know where the hole in its ceiling goes and
+ * it cannot replay a stream belonging to a chunk on another level.
+ */
+export function descentCell(seed: number, depth: number): { i: number; j: number } {
+  const r = mulberry32(hash3(seed, 0x5ce11, depth, 0x13));
+  const i = 6 + Math.floor(r() * 5);
+  // The car park's service ramp runs most of a chunk before it bottoms out, so
+  // its shutter has to stand well into the +z half to leave room behind it.
+  const j = biomeForDepth(depth) === BiomeId.Level1
+    ? 11 + Math.floor(r() * 4)
+    : 6 + Math.floor(r() * 5);
+  return { i, j };
+}
+
 export function isDescentChunk(seed: number, depth: number, cx: number, cz: number): boolean {
   const e = descentLayout(seed, depth).exit;
   return e.cx === cx && e.cz === cz;
@@ -494,6 +520,8 @@ export class DescentManager {
   private scene: THREE.Scene;
   private world: World;
   private code: string;
+  /** the floor these landmarks belong to; the one below has its own */
+  private depth = 0;
 
   constructor(scene: THREE.Scene, world: World, code: string) {
     this.scene = scene;
@@ -504,6 +532,9 @@ export class DescentManager {
   }
 
   private chunkLoaded(c: ChunkData): void {
+    // the other side of a connection streams in too, and it has a way down of
+    // its own that is none of this floor's business
+    if (c.depth !== this.depth) return;
     if (c.descent && !this.prop && c.descent.kind !== 'portal') {
       this.prop = new DescentProp(this.scene, c.descent);
       if (this.prop.blocker) this.world.propBlockers.push(this.prop.blocker);
@@ -524,12 +555,24 @@ export class DescentManager {
     this.sub?.update(subProgress);
   }
 
+  /**
+   * Pick up the landmarks of a floor that is already built. Crossing a
+   * connection changes floors without loading a chunk, so the callback that
+   * normally spots them will not fire — their chunks have been standing since
+   * before you went down.
+   */
+  adopt(world: World, depth: number): void {
+    this.depth = depth;
+    for (const c of world.focusChunks()) this.chunkLoaded(c);
+  }
+
   /** A new floor: forget everything the last one had standing in it. */
-  reset(code: string): void {
+  reset(code: string, depth: number): void {
     this.prop?.dispose();
     this.sub?.dispose();
     this.prop = null;
     this.sub = null;
     this.code = code;
+    this.depth = depth;
   }
 }

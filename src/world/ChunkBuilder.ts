@@ -8,7 +8,7 @@ import {
 } from '../rendering/Textures';
 import { getWaterMaterial } from '../rendering/Water';
 import { BiomeId } from './Biomes';
-import { CarSpot, ChunkData } from './Chunk';
+import { CarSpot, ChunkData, HOLE_CEIL, HOLE_FLOOR } from './Chunk';
 
 const N = CELLS;
 
@@ -295,8 +295,13 @@ export function buildChunk(c: ChunkData): THREE.Group {
     for (let i = 0; i < N; i++) {
       const k = idx(i, j);
       if (c.solid[k]) continue;
-      pushFloorCell(floorBatches, bm.floor, i, j, wx0, wz0, c.floor[k], true);
-      pushFloorCell(floorBatches, bm.ceil, i, j, wx0, wz0, c.ceil - c.ceilDrop[k], false);
+      // a cell a connection passes through is missing that surface entirely
+      if (!(c.hole[k] & HOLE_FLOOR)) {
+        pushFloorCell(floorBatches, bm.floor, i, j, wx0, wz0, c.floor[k], true);
+      }
+      if (!(c.hole[k] & HOLE_CEIL)) {
+        pushFloorCell(floorBatches, bm.ceil, i, j, wx0, wz0, c.ceil - c.ceilDrop[k], false);
+      }
     }
   }
 
@@ -312,7 +317,7 @@ export function buildChunk(c: ChunkData): THREE.Group {
       for (const [ni, nj, dir] of sides) {
         if (ni < 0 || ni >= N || nj < 0 || nj >= N) continue;
         const nk = idx(ni, nj);
-        const nf = c.solid[nk] ? 0 : c.floor[nk];
+        const nf = c.solid[nk] ? c.base : c.floor[nk];
         if (nf <= f + 0.01) continue;
         const h = nf - f;
         const cy = f + h / 2;
@@ -365,9 +370,9 @@ export function buildChunk(c: ChunkData): THREE.Group {
       const isBorder = lineX === 0;
       const x = wx0 + lineX * CELL;
       const z = wz0 + (j + 0.5) * CELL;
-      const fl = isBorder ? 0 : Math.min(
-        c.solid[idx(lineX - 1, j)] ? 0 : c.floor[idx(lineX - 1, j)],
-        c.solid[idx(lineX, j)] ? 0 : c.floor[idx(lineX, j)],
+      const fl = isBorder ? c.base : Math.min(
+        c.solid[idx(lineX - 1, j)] ? c.base : c.floor[idx(lineX - 1, j)],
+        c.solid[idx(lineX, j)] ? c.base : c.floor[idx(lineX, j)],
       );
       const look = wallLook(c, lineX * 37 + j, bm.wall);
       pushBox(buckets, look.key, WALL_THICKNESS, c.ceil - fl, CELL + WALL_THICKNESS, x, fl + (c.ceil - fl) / 2, z, 0, wallUv, look.sheet);
@@ -379,9 +384,9 @@ export function buildChunk(c: ChunkData): THREE.Group {
       const isBorder = lineZ === 0;
       const x = wx0 + (i + 0.5) * CELL;
       const z = wz0 + lineZ * CELL;
-      const fl = isBorder ? 0 : Math.min(
-        c.solid[idx(i, lineZ - 1)] ? 0 : c.floor[idx(i, lineZ - 1)],
-        c.solid[idx(i, lineZ)] ? 0 : c.floor[idx(i, lineZ)],
+      const fl = isBorder ? c.base : Math.min(
+        c.solid[idx(i, lineZ - 1)] ? c.base : c.floor[idx(i, lineZ - 1)],
+        c.solid[idx(i, lineZ)] ? c.base : c.floor[idx(i, lineZ)],
       );
       const look = wallLook(c, 991 + lineZ * 37 + i, bm.wall);
       pushBox(buckets, look.key, CELL + WALL_THICKNESS, c.ceil - fl, WALL_THICKNESS, x, fl + (c.ceil - fl) / 2, z, 0, wallUv, look.sheet);
@@ -397,7 +402,8 @@ export function buildChunk(c: ChunkData): THREE.Group {
       const look = c.biome === BiomeId.Level1
         ? { key: 'concrete', sheet: undefined }
         : wallLook(c, 2731 + i * 37 + j, bm.wall);
-      pushBox(buckets, look.key, CELL, c.ceil, CELL, wx0 + (i + 0.5) * CELL, c.ceil / 2, wz0 + (j + 0.5) * CELL, 0, wallUv, look.sheet);
+      const h = c.ceil - c.base;
+      pushBox(buckets, look.key, CELL, h, CELL, wx0 + (i + 0.5) * CELL, c.base + h / 2, wz0 + (j + 0.5) * CELL, 0, wallUv, look.sheet);
     }
   }
 
@@ -421,9 +427,9 @@ export function buildChunk(c: ChunkData): THREE.Group {
   // sides and a stub across the head, whether or not anything is parked there.
   for (const b of c.bays) {
     for (const s of [-1, 1]) {
-      pushBox(buckets, 'paint', 0.1, 0.012, 3.9, b.x + s * (CELL / 2), 0.008, b.z);
+      pushBox(buckets, 'paint', 0.1, 0.012, 3.9, b.x + s * (CELL / 2), c.base + 0.008, b.z);
     }
-    pushBox(buckets, 'paint', CELL - 0.2, 0.012, 0.1, b.x, 0.008, b.z - 1.95);
+    pushBox(buckets, 'paint', CELL - 0.2, 0.012, 0.1, b.x, c.base + 0.008, b.z - 1.95);
   }
 
   // ---- cars ----
@@ -523,9 +529,9 @@ export function buildChunk(c: ChunkData): THREE.Group {
 
   // ---- tables ----
   for (const t of c.tables) {
-    pushBox(buckets, 'frame', 1.3, 0.06, 0.75, t.x, 0.78, t.z);
+    pushBox(buckets, 'frame', 1.3, 0.06, 0.75, t.x, c.base + 0.78, t.z);
     for (const [dx, dz] of [[-0.55, -0.3], [0.55, -0.3], [-0.55, 0.3], [0.55, 0.3]] as const) {
-      pushBox(buckets, 'frame', 0.07, 0.78, 0.07, t.x + dx, 0.39, t.z + dz);
+      pushBox(buckets, 'frame', 0.07, 0.78, 0.07, t.x + dx, c.base + 0.39, t.z + dz);
     }
   }
 

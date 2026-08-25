@@ -16,6 +16,8 @@ import { PostFX } from '../rendering/PostFX';
 import { updateWater } from '../rendering/Water';
 import { Escape } from '../rendering/Escape';
 import { BiomeId, BIOMES, LAST_DEPTH, defForDepth } from '../world/Biomes';
+import { baseY, shaftFor, slabForY } from '../world/Slabs';
+import { Shaft } from '../world/Shaft';
 import { CarSpot } from '../world/Chunk';
 import {
   DescentManager, chunkCentre, descentKind, descentLayout,
@@ -132,6 +134,14 @@ export class Game {
   // ---- the way down ----
   /** index into DEPTHS: which floor of the building is under your feet */
   private depth = 0;
+  /** the pipe joining this floor to the one below, when the floor has one */
+  private shaft: Shaft | null = null;
+  /**
+   * What each floor had got through of its own way down. Only floors joined by
+   * a connection ever have more than one entry — everything else is still torn
+   * down and rebuilt.
+   */
+  private floorDescent = new Map<number, DescentState>();
   private descent: DescentState = { ...EMPTY_DESCENT };
   /** did the way down offer you something to press this frame */
   private descentUsable = false;
@@ -365,7 +375,7 @@ export class Game {
     this.world.setDepth(this.depth);
     this.world.setWaterRise(this.descent.flood);
     this.portals.reset();
-    this.descentMgr.reset(descentLayout(this.seed, this.depth).code);
+    this.descentMgr.reset(descentLayout(this.seed, this.depth).code, this.depth);
 
     // Everything the chunk loader consults has to be back in place before the
     // first chunk exists: taken spawns, items left on the floor, the door.
@@ -381,6 +391,7 @@ export class Game {
     // stutter and geometry popping in inside the view distance.
     const x = resumed ? resumed.player.x : SPAWN_X;
     const z = resumed ? resumed.player.z : SPAWN_Z;
+    this.setupShaft();
     this.world.preload(x, z);
 
     if (resumed) {
@@ -399,7 +410,7 @@ export class Game {
       if (this.descent.open) this.descentMgr.clearBlocker();
       this.flashMessage('YOU WERE HERE BEFORE');
     } else {
-      this.player.reset(SPAWN_X, SPAWN_Z);
+      this.player.reset(SPAWN_X, SPAWN_Z, baseY(this.depth));
       this.stats.reset();
       this.survivalTime = 0;
       this.torchCharge = 100;
@@ -582,6 +593,15 @@ export class Game {
     if (this.input.pressed('KeyH') && !uiOpen) this.tryHug();
     if (DEV_HACKS && !uiOpen) this.updateDevHacks();
     if (!uiOpen) this.updateQuickSelect();
+
+    // ---- which floor are we on? ----
+    // A connection is walked (or swum) rather than triggered, so the floor the
+    // player is on is whatever their feet are inside, not something a fade
+    // decided for them.
+    if (this.world.shaft) {
+      const d = slabForY(p.position.y);
+      if (d !== this.depth) this.crossInto(d);
+    }
 
     // ---- world streaming ----
     this.world.update(p.position.x, p.position.z);
@@ -775,7 +795,7 @@ export class Game {
     this.spawner.update(dt, ctx);
 
     // ---- atmosphere ----
-    const biome = this.world.biomeAt(p.position.x, p.position.z);
+    const biome = this.world.biomeAt(p.position.y);
     this.fogTargetColor.setHex(biome.fogColor);
     this.fogColor.lerp(this.fogTargetColor, Math.min(1, dt * 1.2));
     this.fog.color.copy(this.fogColor);
@@ -815,6 +835,7 @@ export class Game {
     updateWater(this.time);
     this.pickups.update(this.time);
     this.portals.update(this.time, dt);
+    this.shaft?.update(this.time, this.player.position.y);
     this.descentMgr.update(
       { progress: this.descent.progress, open: this.descent.open, time: this.time, dt },
       this.descent.progress,
@@ -908,6 +929,44 @@ export class Game {
 
   // -------------------------------------------------------- the way down
 
+  /**
+   * Put the connection this floor is an end of in place, if it has one. Both
+   * ends get the same pipe: standing on Level 37 it is the way down, standing
+   * on Level 7 it is the way back, and it is the same object either way.
+   */
+  private setupShaft(): void {
+    this.shaft?.dispose();
+    this.shaft = null;
+    const spec = shaftFor(this.seed, this.depth) ?? shaftFor(this.seed, this.depth - 1);
+    this.world.shaft = spec;
+    // coming up from below, the grate is behind you and long since open
+    this.world.shaftOpen = !!spec && (spec.lower === this.depth || this.descent.open);
+    if (spec) this.shaft = new Shaft(this.scene, spec);
+  }
+
+  /**
+   * The player's feet have crossed into the floor below (or back out of it).
+   * Nothing is rebuilt: both slabs are already standing, so all this moves is
+   * which one the world answers questions about and which card the HUD shows.
+   */
+  private crossInto(depth: number): void {
+    // Each floor keeps its own progress. Without this, surfacing on Level 7
+    // would find its hatch already cranked open, because the state it would be
+    // reading is the one Level 37 left behind.
+    this.floorDescent.set(this.depth, this.descent);
+    this.depth = depth;
+    this.descent = this.floorDescent.get(depth) ?? { ...EMPTY_DESCENT };
+    this.world.setFocus(depth);
+    this.world.setWaterRise(this.descent.flood);
+    this.descentMgr.reset(descentLayout(this.seed, depth).code, depth);
+    this.descentMgr.adopt(this.world, depth);
+    const def = defForDepth(depth);
+    this.hud.showLevelCard(def.name, def.tagline);
+    noteLevel(depth);
+    this.telemetry.level(depth, this.survivalTime, this.inputMode());
+    this.saveRun();
+  }
+
   /** The prop this floor's exit is attached to, if its chunk is loaded. */
   private get descentProp() {
     return this.descentMgr.prop;
@@ -936,7 +995,7 @@ export class Game {
     const p = this.player.position;
     let best: CarSpot | null = null;
     let bestD = maxDist * maxDist;
-    for (const c of this.world.allChunks()) {
+    for (const c of this.world.focusChunks()) {
       for (const car of c.cars) {
         if (car.inverted) continue; // that one is on the ceiling, and it is not your problem
         const dx = car.x - p.x;
@@ -972,6 +1031,8 @@ export class Game {
       case 'drain':
         this.audio.playSfx('valve', 0.6);
         this.flashMessage('THE GRATE HAS OPENED. IT WANTS YOU DOWN THERE.');
+        // and the pipe under it stops being scenery
+        this.world.shaftOpen = true;
         break;
       default:
         break;
@@ -1038,10 +1099,10 @@ export class Game {
       this.alarmChirp -= dt;
       if (this.alarms.size > 0 && this.alarmChirp <= 0) {
         this.alarmChirp = 2.4;
-        for (const c of this.world.allChunks()) {
+        for (const c of this.world.focusChunks()) {
           for (const car of c.cars) {
             if (!this.alarms.has(car.id)) continue;
-            this.audio.playSfxAt('carAlarm', new THREE.Vector3(car.x, 1.2, car.z), 0.55, 9);
+            this.audio.playSfxAt('carAlarm', new THREE.Vector3(car.x, car.y + 1.2, car.z), 0.55, 9);
           }
         }
       }
@@ -1056,7 +1117,7 @@ export class Game {
           if (!live && !uiOpen && this.input.pressed('KeyE')) {
             this.alarms.set(car.id, ALARM_TIME);
             this.alarmChirp = 0;
-            this.audio.playSfxAt('carAlarm', new THREE.Vector3(car.x, 1.2, car.z), 0.75, 9);
+            this.audio.playSfxAt('carAlarm', new THREE.Vector3(car.x, car.y + 1.2, car.z), 0.75, 9);
             if (this.liveAlarms() >= ALARMS_NEEDED) this.openTheWayDown();
             else this.flashMessage(`${this.liveAlarms()} OF ${ALARMS_NEEDED} · THEY DON'T SCREAM FOR LONG`);
           }
@@ -1109,8 +1170,11 @@ export class Game {
         break;
       }
       case 'drain': {
-        if (this.descent.open && toProp < 2.6 && this.player.underwater) this.beginDescend();
-        else if (toProp < 3.2 && !this.descent.open) {
+        // No fade and no rebuild: the pipe is real and both floors are already
+        // standing, so going down it is just swimming down it.
+        if (this.descent.open && toProp < 4 && !this.player.underwater) {
+          prompt = 'THE GRATE IS OPEN — IT IS A LONG WAY DOWN';
+        } else if (toProp < 3.2 && !this.descent.open) {
           prompt = this.descent.progress >= 1
             ? 'THE GRATE IS STILL SHUT — IT NEEDS MORE WATER'
             : 'A DRAIN, AND NOTHING TO PULL IT · FIND THE MAIN VALVE';
@@ -1178,6 +1242,7 @@ export class Game {
   private enterLevel(depth: number): void {
     this.depth = depth;
     const def = defForDepth(depth);
+    this.floorDescent.clear();
     this.descent = { ...EMPTY_DESCENT };
     this.alarms.clear();
     this.vendingLeft.clear();
@@ -1186,18 +1251,19 @@ export class Game {
     this.pickups.reset();
     this.spawner.reset();
     this.portals.reset();
-    this.descentMgr.reset(descentLayout(this.seed, depth).code);
+    this.descentMgr.reset(descentLayout(this.seed, depth).code, depth);
     this.escapeFuses = 0;
     this.portalOpened = false;
 
+    this.setupShaft();
     this.world.preload(SPAWN_X, SPAWN_Z);
-    this.player.reset(SPAWN_X, SPAWN_Z);
+    this.player.reset(SPAWN_X, SPAWN_Z, baseY(depth));
     // You arrive the way the last floor spat you out: on your feet, through
     // the ceiling, or head-first into water. Spawn just under the ceiling
     // rather than through it — the controller pushes you back down out of
     // solid roof, and that reads as a stumble, not a fall.
     if (def.arrival !== 'stand') {
-      this.player.position.y = def.ceiling - PLAYER_HEIGHT - 0.06;
+      this.player.position.y = baseY(depth) + def.ceiling - PLAYER_HEIGHT - 0.06;
       // the torrent has been carrying you for a while before the level catches
       // you; the water bleeds it off over the first second or so of the dive
       this.player.velocity.y = def.arrival === 'plunge' ? -11 : -2;
@@ -1537,7 +1603,7 @@ export class Game {
     // stand a couple of metres off, looking straight at it
     const c = portal.center;
     const wall = portal.spot.onWall;
-    this.player.position.set(c.x + (wall ? 2.4 : 0), 0.05, c.z + (wall ? 0 : 2.2));
+    this.player.position.set(c.x + (wall ? 2.4 : 0), baseY(LAST_DEPTH) + 0.05, c.z + (wall ? 0 : 2.2));
     this.player.yaw = wall ? Math.PI / 2 : 0;
     this.player.pitch = wall ? 0 : -0.55;
     return true;
@@ -1552,7 +1618,7 @@ export class Game {
     const z = f.cz * CHUNK + CHUNK / 2;
     this.world.preload(x, z);
     let plinth: { x: number; y: number; z: number } | null = null;
-    for (const c of this.world.allChunks()) {
+    for (const c of this.world.focusChunks()) {
       if (c.cx === f.cx && c.cz === f.cz && c.pedestal) plinth = c.pedestal;
     }
     if (!plinth) return false;
@@ -1580,7 +1646,7 @@ export class Game {
     const prop = this.descentMgr.prop;
     if (!prop) return false;
     const t = prop.target;
-    this.player.position.set(t.x, Math.max(t.y, 0.05), t.z + 2.4);
+    this.player.position.set(t.x, Math.max(t.y, baseY(this.depth) + 0.05), t.z + 2.4);
     this.player.pitch = -0.2;
     this.player.yaw = Math.PI;
     return true;
@@ -1593,7 +1659,7 @@ export class Game {
     this.world.preload(s.cx * CHUNK + CHUNK / 2, s.cz * CHUNK + CHUNK / 2);
     const sub = this.descentMgr.sub;
     if (!sub) return false;
-    this.player.position.set(sub.position.x + 1.6, 0.05, sub.position.z);
+    this.player.position.set(sub.position.x + 1.6, baseY(this.depth) + 0.05, sub.position.z);
     this.player.yaw = Math.PI / 2;
     this.player.pitch = 0;
     return true;
@@ -1606,7 +1672,7 @@ export class Game {
 
   private nearestVending(maxDist: number): { id: string } | null {
     const p = this.player.position;
-    for (const c of this.world.allChunks()) {
+    for (const c of this.world.focusChunks()) {
       for (const v of c.vending) {
         const dx = v.x - p.x;
         const dz = v.z - p.z;
@@ -1618,7 +1684,7 @@ export class Game {
 
   private nearestTap(maxDist: number): { x: number; z: number } | null {
     const p = this.player.position;
-    for (const c of this.world.allChunks()) {
+    for (const c of this.world.focusChunks()) {
       for (const t of c.taps) {
         const dx = t.x - p.x;
         const dz = t.z - p.z;
