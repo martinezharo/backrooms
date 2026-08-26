@@ -494,6 +494,8 @@ export class DescentManager {
   private scene: THREE.Scene;
   private world: World;
   private code: string;
+  /** Last known state, including while the landmark's chunk is unloaded. */
+  private open = false;
 
   constructor(scene: THREE.Scene, world: World, code: string) {
     this.scene = scene;
@@ -506,7 +508,7 @@ export class DescentManager {
   private chunkLoaded(c: ChunkData): void {
     if (c.descent && !this.prop && c.descent.kind !== 'portal') {
       this.prop = new DescentProp(this.scene, c.descent);
-      if (this.prop.blocker) this.world.propBlockers.push(this.prop.blocker);
+      if (this.prop.blocker && !this.open) this.world.propBlockers.push(this.prop.blocker);
     }
     if (c.sub && !this.sub) this.sub = new SubProp(this.scene, c.sub, this.code);
   }
@@ -520,6 +522,8 @@ export class DescentManager {
   }
 
   update(state: PropState, subProgress: number): void {
+    if (state.open && !this.open) this.clearBlocker();
+    this.open = state.open;
     this.prop?.update(state);
     this.sub?.update(subProgress);
   }
@@ -531,5 +535,6 @@ export class DescentManager {
     this.prop = null;
     this.sub = null;
     this.code = code;
+    this.open = false;
   }
 }
