@@ -50,13 +50,20 @@ await page.screenshot({ path: `${shots}/touch_stick.png` });
 const joggedNotRun = await page.evaluate(() => window.__game.player.running);
 // shoving the thumb out to the rim is the sprint — there is no RUN button
 await stick.move(150, 120);
-await wait(900);
-const sprinted = await page.evaluate(() => window.__game.player.running);
+// TouchHandle.move resolves when the browser accepts the protocol command, not
+// necessarily when the renderer has dispatched pointermove. Poll the state so
+// a slow SwiftShader frame cannot make a delivered rim move look like a miss.
+const sprinted = await page.waitForFunction(
+  () => window.__game.player.running,
+  { timeout: 5000, polling: 100 },
+).then(() => true, () => false);
 await stick.end();
 // software rendering runs this at a few frames a second; give the simulation
 // time to see the released key before asking what the legs are doing
-await wait(900);
-const stoppedSprinting = await page.evaluate(() => !window.__game.player.running);
+const stoppedSprinting = await page.waitForFunction(
+  () => !window.__game.player.running,
+  { timeout: 5000, polling: 100 },
+).then(() => true, () => false);
 const afterMove = await player();
 const walked = Math.hypot(afterMove.x - before.x, afterMove.z - before.z);
 
