@@ -103,10 +103,9 @@ bundle containing the `window.__game` handle or the floor-skipping shortcuts.
 
 ## Anonymous gameplay analytics
 
-The Worker counts probable engaged sessions (real start, 45 visible seconds,
-and 5 m of movement) and records the event and Cloudflare country, without IPs
-or identifiers. Use `?telemetry=off` to exclude your browser; `?telemetry=on`
-re-enables it.
+The game sends minimal anonymous telemetry about gameplay events, with no IP,
+identifier, seed, or save data. Disable it with `?telemetry=off`
+(`?telemetry=on` re-enables it); see [the detailed analytics notes](docs/analytics.md).
 
 ## Controls
 
