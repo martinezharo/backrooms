@@ -1,23 +1,25 @@
 // Headless check: hunt down a graffiti tag on a Level 0 wall and photograph it.
+// The tags are the only writing in the world and they are placed by the same
+// per-chunk generator as everything else, so an empty sweep means chunk
+// decoration has stopped happening at all.
+//
 // Usage: node scripts/graffiti.mjs [url]
 
-import puppeteer from 'puppeteer';
+import { gameUrl, launch, report, wait, watch, waitForGame } from './lib/check.mjs';
 
-const url = process.argv[2] ?? 'http://localhost:5199/?seed=1234';
+const url = gameUrl();
+const shot = process.env.SHOT ?? `${process.env.SHOT_DIR ?? '/tmp'}/graffiti.png`;
 
-const browser = await puppeteer.launch({
-  headless: true,
-  args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--no-sandbox'],
-  defaultViewport: { width: 1280, height: 800 },
-});
+const browser = await launch();
 const page = await browser.newPage();
-const errors = [];
-page.on('pageerror', (e) => errors.push(e.message));
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+const errors = watch(page);
 
-await page.goto(url, { waitUntil: 'networkidle0' });
+await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
 await page.click('#btn-start');
-await new Promise((r) => setTimeout(r, 3000));
+await waitForGame(page);
+await page.waitForFunction(() => window.__game.state === 'playing',
+  { timeout: 30000, polling: 200 });
+await wait(2500);
 
 const found = await page.evaluate(() => {
   const g = window.__game;
@@ -52,7 +54,16 @@ const found = await page.evaluate(() => {
 });
 
 console.log(JSON.stringify(found));
-await new Promise((r) => setTimeout(r, 1500));
-await page.screenshot({ path: process.env.SHOT ?? '/tmp/claude-0/graffiti.png' });
-console.log(errors.length ? `ERRORS: ${errors.join(' | ')}` : 'NO PAGE ERRORS');
+await wait(2000);
+await page.screenshot({ path: shot });
+
+report('graffiti', {
+  chunksBuilt: found.scanned > 10,
+  wallsGotTagged: found.tagged > 0,
+  tagHasAPlaceOnAWall: !!found.first
+    && Number.isFinite(found.first.x)
+    && Number.isFinite(found.first.z)
+    && Number.isFinite(found.first.angle),
+}, errors);
+
 await browser.close();

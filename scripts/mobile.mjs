@@ -3,29 +3,19 @@
 // buttons, and checks the player actually reacted.
 // Usage: node scripts/mobile.mjs [url]
 
-import puppeteer from 'puppeteer';
+import { gameUrl, launch, watch, waitForGame } from './lib/check.mjs';
 
-const url = process.argv[2] ?? 'http://localhost:5199/?seed=1234&touch=1';
+const url = gameUrl('http://localhost:5199', '?seed=1234&touch=1');
+const shots = process.env.SHOT_DIR ?? '/tmp';
 const W = 844;
 const H = 390;
 
-const browser = await puppeteer.launch({
-  headless: true,
-  args: [
-    '--enable-unsafe-swiftshader',
-    '--use-angle=swiftshader',
-    '--no-sandbox',
-    `--window-size=${W},${H}`,
-  ],
-  defaultViewport: { width: W, height: H, hasTouch: true, isMobile: true, deviceScaleFactor: 2 },
+const browser = await launch({
+  width: W, height: H, hasTouch: true, isMobile: true, deviceScaleFactor: 2,
 });
 
 const page = await browser.newPage();
-const errors = [];
-page.on('console', (msg) => {
-  if (msg.type() === 'error') errors.push(`[console] ${msg.text()}`);
-});
-page.on('pageerror', (err) => errors.push(`[pageerror] ${err.message}`));
+const errors = watch(page);
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const player = () => page.evaluate(() => {
@@ -35,11 +25,16 @@ const player = () => page.evaluate(() => {
 
 await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
 await wait(800);
-await page.screenshot({ path: '/tmp/touch_menu.png' });
+await page.screenshot({ path: `${shots}/touch_menu.png` });
 
 await page.click('#btn-start');
-await wait(4000);
-await page.screenshot({ path: '/tmp/touch_game.png' });
+// Software rendering can take tens of seconds to reach the first frame; wait
+// for the run to be under way rather than for a stopwatch.
+await waitForGame(page);
+await page.waitForFunction(() => window.__game.state === 'playing',
+  { timeout: 60000, polling: 200 });
+await wait(2000);
+await page.screenshot({ path: `${shots}/touch_game.png` });
 
 const controlsVisible = await page.evaluate(() =>
   !document.getElementById('touch-controls').classList.contains('hidden')
@@ -51,7 +46,7 @@ const stick = await page.touchscreen.touchStart(150, 250);
 // a lean, not a shove: far enough to walk, short of the rim that sprints
 await stick.move(128, 228);
 await wait(1200);
-await page.screenshot({ path: '/tmp/touch_stick.png' });
+await page.screenshot({ path: `${shots}/touch_stick.png` });
 const joggedNotRun = await page.evaluate(() => window.__game.player.running);
 // shoving the thumb out to the rim is the sprint — there is no RUN button
 await stick.move(150, 120);
@@ -151,14 +146,14 @@ if (carried > 0) {
 
 await tap('#touch-btn-bag');
 await wait(500);
-await page.screenshot({ path: '/tmp/touch_bag.png' });
+await page.screenshot({ path: `${shots}/touch_bag.png` });
 // a finger cannot drag an item onto the floor: the tapped tile grows a button
 let droppedFromBag = null;
 if (carried > 0) {
   await tap('.inv-item');
   const actionsUp = await page.evaluate(() =>
     !document.getElementById('inventory-actions').classList.contains('hidden'));
-  await page.screenshot({ path: '/tmp/touch_bag_item.png' });
+  await page.screenshot({ path: `${shots}/touch_bag_item.png` });
   await tap('#inventory-action-drop');
   await wait(400);
   const left = await page.evaluate(() => window.__game.inventory.items.length);
@@ -180,7 +175,7 @@ const bagClosed = await page.evaluate(() =>
 // ---- pause ----
 await tap('#touch-btn-pause');
 await wait(500);
-await page.screenshot({ path: '/tmp/touch_pause.png' });
+await page.screenshot({ path: `${shots}/touch_pause.png` });
 const paused = await page.evaluate(() => ({
   menu: !document.getElementById('pause-screen').classList.contains('hidden'),
   controlsHidden: document.getElementById('touch-controls').classList.contains('hidden'),

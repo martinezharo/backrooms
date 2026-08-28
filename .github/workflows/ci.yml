@@ -1,0 +1,91 @@
+name: CI
+
+# Nothing here deploys. The point is that `main` is always in a state that
+# could be deployed: it type-checks, the logic tests pass, it builds, and the
+# game still boots and plays in a real browser.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: types, tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # `pnpm build` runs this too, but running it on its own means a type
+      # error is reported as a type error rather than as a failed build.
+      - name: Type-check game, Worker and tests
+        run: pnpm run check
+
+      - name: Unit and Worker tests
+        run: pnpm test
+
+      # Runs Vite and then inspects the deployable JavaScript for dev-only
+      # handles and shortcuts. The same command is used by pnpm deploy.
+      - name: Production build
+        run: pnpm run build:production
+
+      - name: Check the deployable output exists
+        run: |
+          test -f dist/client/index.html
+          test -f dist/backrooms/index.js
+
+  e2e:
+    name: ${{ matrix.check }} (headless)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      # One runner per check. They are slow — there is no GPU, so WebGL goes
+      # through SwiftShader at a few frames a second — and running them in
+      # series would put the whole suite well over half an hour.
+      fail-fast: false
+      matrix:
+        check: [smoke, tour, save, escape, mobile, graffiti]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # pnpm does not run puppeteer's postinstall, so fetch Chrome explicitly.
+      - name: Install Chrome for Puppeteer
+        run: pnpm exec puppeteer browsers install chrome
+
+      # Builds with VITE_HACKS=dev, serves dist/client and drives the game.
+      - name: Run the ${{ matrix.check }} check
+        run: pnpm test:e2e --only ${{ matrix.check }}
+        env:
+          SHOT_DIR: ${{ runner.temp }}/shots
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ matrix.check }}
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore
+          retention-days: 7

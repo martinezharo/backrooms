@@ -6,9 +6,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "pnpm run check && vite build",
+    "build": "pnpm run check && pnpm run build:production",
+    "build:production": "vite build && pnpm run verify:production",
     "preview": "pnpm run build && wrangler dev",
-    "check": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit",
+    "check": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit && tsc -p tsconfig.test.json --noEmit && tsc -p tsconfig.worker-test.json --noEmit",
+    "test": "pnpm run test:unit && pnpm run test:worker",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "test:worker": "vitest run --config vitest.worker.config.ts",
+    "test:watch": "vitest",
+    "test:e2e": "node scripts/e2e.mjs",
+    "serve:dist": "node scripts/serve.mjs dist/client 5199",
+    "verify:production": "node scripts/verify-production-build.mjs",
     "deploy": "pnpm run build && wrangler deploy"
   },
   "packageManager": "pnpm@10.33.0",
@@ -17,11 +25,15 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.44.0",
-    "@cloudflare/workers-types": "5.20260818.1",
+    "@cloudflare/vitest-plugin": "^1.1.1",
+    "@cloudflare/workers-types": "5.20260826.1",
+    "@types/node": "^26.4.0",
     "@types/three": "^0.184.1",
+    "jsdom": "^30.0.1",
     "puppeteer": "^25.1.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
+    "vitest": "^4.1.11",
     "wrangler": "^4.110.0"
   }
 }

@@ -1,18 +1,27 @@
 // Headless internals probe: enemies, water meshes, pickups, taps, basins.
+//
+// This one is a probe rather than a gate — it deliberately sits through the
+// encounter director's 45 s first-spawn grace, which is too long to put in
+// front of every push. It still fails on a page error, so running it by hand
+// after touching the spawner or the water tells you something.
+//
+// Usage: node scripts/inspect.mjs [url]        GRACE=0 skips the long wait
 
-import puppeteer from 'puppeteer';
+import { gameUrl, launch, report, wait, watch, waitForGame } from './lib/check.mjs';
 
-const browser = await puppeteer.launch({
-  headless: true,
-  args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--no-sandbox'],
-  defaultViewport: { width: 1280, height: 800 },
-});
+const url = gameUrl();
+const grace = Number(process.env.GRACE ?? 48000);
+
+const browser = await launch();
 const page = await browser.newPage();
-const errors = [];
-page.on('pageerror', (e) => errors.push(e.message));
-await page.goto('http://localhost:5199/?seed=1234', { waitUntil: 'networkidle0' });
+const errors = watch(page);
+
+await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
 await page.click('#btn-start');
-await new Promise((r) => setTimeout(r, 3000));
+await waitForGame(page);
+await page.waitForFunction(() => window.__game.state === 'playing',
+  { timeout: 30000, polling: 200 });
+await wait(2500);
 
 const probe = () => page.evaluate(() => {
   const g = window.__game;
@@ -33,20 +42,29 @@ const probe = () => page.evaluate(() => {
     pos: g.player.position.toArray().map((v) => +v.toFixed(1)),
     health: g.stats.health.toFixed(0),
     enemies: g.spawner.enemies.map((e) => `${e.typeName}:${e.state}`),
-    meshes, waterMeshes, taps, lights, spawns,
+    meshes, waterMeshes, taps, lights, spawns, basins,
   };
 });
 
-console.log('T+3s  ', JSON.stringify(await probe()));
+const lobby = await probe();
+console.log('T+3s  ', JSON.stringify(lobby));
 
 // wait past the encounter director's first-spawn grace (45 s)
-await new Promise((r) => setTimeout(r, 48000));
-console.log('T+51s ', JSON.stringify(await probe()));
+if (grace > 0) {
+  await wait(grace);
+  console.log('T+51s ', JSON.stringify(await probe()));
+}
 
 // check the poolrooms' water
 await page.evaluate(() => window.__game.teleportToDepth(2));
-await new Promise((r) => setTimeout(r, 2000));
-console.log('L37   ', JSON.stringify(await probe()));
+await wait(3000);
+const pool = await probe();
+console.log('L37   ', JSON.stringify(pool));
 
-console.log(errors.length ? `ERRORS: ${errors.join(' | ')}` : 'NO PAGE ERRORS');
+report('inspect', {
+  lobbyIsFurnished: lobby.meshes > 50 && lobby.lights > 0,
+  lobbyHasSomethingToScavenge: lobby.spawns > 0,
+  poolroomsHoldWater: pool.waterMeshes > 0 && pool.basins > 0,
+}, errors);
+
 await browser.close();

@@ -132,10 +132,6 @@ export class Combat {
     this.animateViewmodel(dt, player);
   }
 
-  isBlocking(): boolean {
-    return this.blocking;
-  }
-
   damageMultiplierIn(): number {
     return this.blocking ? BLOCK_MULT : 1;
   }

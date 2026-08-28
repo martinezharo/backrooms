@@ -178,8 +178,16 @@ export const DEPTH_COUNT = DEPTHS.length;
 /** The bottom of the building: the only floor with a way out instead of down. */
 export const LAST_DEPTH = DEPTH_COUNT - 1;
 
+/**
+ * A depth index arrives from a save file and from the records blob, both of
+ * which are player-writable JSON. A fractional or non-finite one used to index
+ * straight off the end of DEPTHS and hand back `undefined`, which took the
+ * landing page down with it before the game had even started.
+ */
 export function biomeForDepth(depth: number): BiomeId {
-  return DEPTHS[Math.max(0, Math.min(LAST_DEPTH, depth))];
+  const i = Math.round(Number(depth));
+  if (!Number.isFinite(i)) return DEPTHS[0];
+  return DEPTHS[Math.max(0, Math.min(LAST_DEPTH, i))];
 }
 
 export function defForDepth(depth: number): BiomeDef {

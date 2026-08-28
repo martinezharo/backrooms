@@ -1,13 +1,10 @@
-const TELEMETRY_PATH = '/api/telemetry';
-const MAX_BODY_BYTES = 512;
-const EVENTS = new Set([
-  'game_started',
-  'engaged_session',
-  'level_reached',
-  'death',
-  'escape',
-]);
-const INPUT_MODES = new Set(['keyboard', 'touch']);
+import {
+  EVENTS, INPUT_MODES, MAX_BODY_BYTES, MAX_DEPTH, TELEMETRY_PATH,
+} from './constants';
+
+export {
+  EVENTS, INPUT_MODES, MAX_BODY_BYTES, MAX_DEPTH, TELEMETRY_PATH,
+} from './constants';
 
 interface TelemetryPayload {
   event: string;
@@ -79,7 +76,7 @@ function parsePayload(value: unknown): TelemetryPayload {
   if (typeof event !== 'string' || !EVENTS.has(event)) {
     throw new PayloadError('Unknown telemetry event', 400);
   }
-  if (typeof depth !== 'number' || !Number.isInteger(depth) || depth < 0 || depth > 5) {
+  if (typeof depth !== 'number' || !Number.isInteger(depth) || depth < 0 || depth > MAX_DEPTH) {
     throw new PayloadError('Invalid depth', 400);
   }
   if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0 || seconds > 86_400) {

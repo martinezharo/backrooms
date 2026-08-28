@@ -46,7 +46,9 @@ web font; see the [font credits](public/fonts/CREDITS.md).
 ```sh
 pnpm install
 pnpm dev          # Vite development server at http://localhost:5173
-pnpm check        # TypeScript check
+pnpm check        # TypeScript check — game, Worker and tests
+pnpm test         # unit and Worker tests
+pnpm test:e2e     # build, serve and drive the game in a headless browser
 pnpm build        # TypeScript check plus static Vite build in dist/
 pnpm preview      # build, then serve the Workers asset locally
 pnpm deploy       # build and deploy with Wrangler
@@ -56,19 +58,48 @@ The development environment enables `VITE_HACKS=dev`, which exposes the
 `window.__game` handle and shortcuts used by the headless checks. Production
 builds omit those hacks.
 
-## Browser checks
+## Tests
 
-The Puppeteer scripts expect a running game, a Puppeteer-compatible Chrome, and
-normally use port `5199`:
+Two layers, and they answer different questions.
+
+`pnpm test` runs [Vitest](https://vitest.dev) over the parts of the game that
+can be reasoned about without a GPU: the seeded generators, the save file, the
+records, the item catalog and the inventory grid, the survival stats, the level
+table, combat, the fuse and descent layouts, the timecode, the control labels,
+and the telemetry client. Worker handler tests run in Cloudflare's `workerd`
+runtime. The suite also holds
+[`index.html`](index.html) against every `getElementById` in the codebase, and
+the Worker's accepted events against the ones the game can send — two contracts
+nothing else in the build can see across.
+
+`pnpm test:e2e` builds the game with the dev hacks on, serves `dist/client`
+and drives the result through Puppeteer: it starts a run, walks, opens the bag,
+visits all six floors and their ways down, saves and resumes a checkpoint,
+escapes through the portal, and plays the whole thing again on a phone-sized
+touchscreen. Each check prints a pass/fail line and sets an exit code.
+
+```sh
+pnpm test:e2e                      # everything, from a fresh build
+pnpm test:e2e --only smoke,save    # just those
+pnpm test:e2e --no-build           # reuse dist/ as it stands
+```
+
+Set `SHOT_DIR` to collect the screenshots somewhere other than `/tmp`. Against
+a server you started yourself, each script also takes a URL:
 
 ```sh
 pnpm dev --port 5199
 node scripts/smoke.mjs 'http://localhost:5199/?seed=1234'
-node scripts/mobile.mjs 'http://localhost:5199/?seed=1234&touch=1'
-node scripts/save.mjs 'http://localhost:5199/?seed=1234'
 ```
 
-Other focused probes and tours are in [`scripts/`](scripts/).
+[`scripts/inspect.mjs`](scripts/inspect.mjs) is a probe rather than a gate: it
+sits through the encounter director's 45-second grace period, so it is run by
+hand after touching the spawner or the water.
+
+[CI](.github/workflows/ci.yml) runs the type checks, the unit tests, a
+production build and the headless checks on every push and pull request. The
+repository's `pnpm build` path, which `pnpm deploy` also uses, rejects a client
+bundle containing the `window.__game` handle or the floor-skipping shortcuts.
 
 ## Anonymous gameplay analytics
 

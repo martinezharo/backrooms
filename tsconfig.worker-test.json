@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.worker.json",
+  "compilerOptions": {
+    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-plugin/types"],
+    "noUnusedLocals": false
+  },
+  "include": [
+    "worker",
+    "tests/worker/telemetry.test.ts",
+    "vitest.worker.config.ts"
+  ]
+}

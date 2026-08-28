@@ -33,6 +33,7 @@ import { Keypad } from '../ui/Keypad';
 import { Menus } from '../ui/Menus';
 import { TouchControls } from '../ui/TouchControls';
 import { DEV_HACKS } from './dev';
+import { updateDevHacks } from './devHacks';
 import { Input } from './Input';
 import { noteDepth, noteEscape, noteLevel, noteRunStarted } from './Records';
 import { clearSave, DescentState, loadSave, SaveGame, writeSave } from './Save';
@@ -580,7 +581,18 @@ export class Game {
     }
     // secret: hug the monster standing next to you
     if (this.input.pressed('KeyH') && !uiOpen) this.tryHug();
-    if (DEV_HACKS && !uiOpen) this.updateDevHacks();
+    if (DEV_HACKS && !uiOpen) {
+      updateDevHacks({
+        depth: this.depth,
+        pressed: (code) => this.input.pressed(code),
+        down: (code) => this.input.down(code),
+        teleportToExit: () => this.teleportToExit(),
+        teleportToDepth: (depth) => this.teleportToDepth(depth),
+        teleportToDescent: () => this.teleportToDescent(),
+        teleportToSub: () => this.teleportToSub(),
+        message: (text) => this.flashMessage(text),
+      });
+    }
     if (!uiOpen) this.updateQuickSelect();
 
     // ---- world streaming ----
@@ -768,7 +780,7 @@ export class Game {
       player: p,
       lighting: this.lighting,
       time: this.time,
-      isBlocking: () => this.combat.isBlocking(),
+      damageMultiplierIn: () => this.combat.damageMultiplierIn(),
       damagePlayer: (amount, cause) => this.stats.applyDamage(amount, cause),
       notifySound: (e, intensity) => this.onEnemyCue(e, intensity),
     };
@@ -1487,40 +1499,6 @@ export class Game {
     this.inventory.remove(item);
     this.pickups.drop(item, this.player.position);
     this.audio.playSfx('click', 0.4);
-  }
-
-  /**
-   * Dev-only keys, compiled out of a production build with the rest of
-   * `DEV_HACKS`. Nothing here is part of the game:
-   *
-   *   PageDown / PageUp   one floor down / up; PageDown on the last jumps to the exit
-   *   Backslash           jump to this floor's way down
-   *   Shift+Backslash     jump to the thing that unlocks it, if it has one
-   *
-   * The number keys are left alone on purpose — they belong to the
-   * quick-select bar, and Ctrl+number belongs to the browser's tab strip.
-   */
-  private updateDevHacks(): void {
-    let target = -1;
-    if (this.input.pressed('PageDown')) target = this.depth + 1;
-    if (this.input.pressed('PageUp')) target = this.depth - 1;
-    if (target > LAST_DEPTH) {
-      this.teleportToExit();
-      this.flashMessage('DEV — THE EXIT');
-      return;
-    }
-    if (target >= 0 && target <= LAST_DEPTH && target !== this.depth) {
-      this.teleportToDepth(target);
-      this.flashMessage(`DEV — ${defForDepth(target).name}`);
-      return;
-    }
-    if (this.input.pressed('Backslash')) {
-      const toSub = this.input.down('ShiftLeft') || this.input.down('ShiftRight');
-      const ok = toSub ? this.teleportToSub() : this.teleportToDescent();
-      this.flashMessage(ok
-        ? `DEV — ${toSub ? 'THE UNLOCK' : 'THE WAY DOWN'}`
-        : 'DEV — NOTHING TO JUMP TO');
-    }
   }
 
   /** Dev/test helper: jump to the exit portal, optionally with fuses in hand. */

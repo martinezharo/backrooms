@@ -13,7 +13,7 @@ export interface EnemyContext {
   enemies?: readonly Enemy[];
   lighting: Lighting;
   time: number;
-  isBlocking: () => boolean;
+  damageMultiplierIn: () => number;
   damagePlayer: (amount: number, cause: string) => void;
   /** 0..1 — how loud/danger-driving this enemy currently is */
   notifySound?: (e: Enemy, intensity: number) => void;
@@ -262,7 +262,7 @@ export abstract class Enemy {
       if (this.attackTimer <= 0) {
         this.attackTimer = this.attackCooldown;
         this.attackPulse = 1;
-        const dmg = ctx.isBlocking() ? this.damage * 0.45 : this.damage;
+        const dmg = this.damage * ctx.damageMultiplierIn();
         ctx.damagePlayer(dmg, this.typeName);
         ctx.notifySound?.(this, 1);
       }

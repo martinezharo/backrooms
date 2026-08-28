@@ -1,0 +1,17 @@
+{
+  // The browser-side tests. They live under the same lib as src/ so a test can
+  // only ask the game for things a browser would actually have.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noUnusedLocals": false
+  },
+  "include": [
+    "src",
+    "tests/setup.ts",
+    "tests/helpers",
+    "tests/unit",
+    "tests/worker/contract.test.ts",
+    "vitest.config.ts"
+  ]
+}

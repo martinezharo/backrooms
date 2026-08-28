@@ -3,24 +3,30 @@
 // does not survive the two endings.
 // Usage: node scripts/save.mjs [url]
 
-import puppeteer from 'puppeteer';
+import { gameUrl, launch } from './lib/check.mjs';
 
-const url = process.argv[2] ?? 'http://localhost:5199/?seed=1234';
+const url = gameUrl();
 const KEY = 'backrooms.save.v1';
+const shots = process.env.SHOT_DIR ?? '/tmp';
 
-const browser = await puppeteer.launch({
-  headless: true,
-  args: [
-    '--enable-unsafe-swiftshader',
-    '--use-angle=swiftshader',
-    '--no-sandbox',
-    '--window-size=1280,800',
-  ],
-  defaultViewport: { width: 1280, height: 800 },
-});
+const browser = await launch();
 
 const errors = [];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Press a door and wait for the run to actually be under way. Software
+ * rendering can take tens of seconds to get to the first frame, so every one of
+ * these waits on the game's own state rather than on a fixed delay.
+ */
+async function enterThrough(page, selector) {
+  await page.click(selector);
+  await page.waitForFunction(() => !!window.__game, { timeout: 60000, polling: 200 })
+    .catch(() => { throw new Error('window.__game never appeared — build with VITE_HACKS=dev'); });
+  await page.waitForFunction(() => window.__game.state === 'playing',
+    { timeout: 60000, polling: 200 });
+  await wait(1500);   // let the first chunks settle before poking at the run
+}
 
 async function openTab() {
   const page = await browser.newPage();
@@ -66,8 +72,7 @@ const cleanSlate = await page.evaluate(() =>
   document.getElementById('btn-continue').classList.contains('hidden'));
 console.log('continue hidden on a clean slate:', cleanSlate);
 
-await page.click('#btn-start');
-await wait(5000);
+await enterThrough(page, '#btn-start');
 
 // A run worth resuming: a fuse off its plinth, an item left on the floor,
 // a hugged monster, a drained torch and the door already fed.
@@ -121,8 +126,7 @@ console.log('continue offered:', label);
 console.log('start button relabelled:', await page.evaluate(() =>
   document.getElementById('btn-start').textContent));
 
-await page.click('#btn-continue');
-await wait(6000);
+await enterThrough(page, '#btn-continue');
 const after = await snapshot(page);
 console.log('after: ', JSON.stringify(after));
 
@@ -146,8 +150,7 @@ await page.close();
 
 page = await openTab();
 await page.evaluate((k) => localStorage.removeItem(k), KEY);
-await page.click('#btn-start');
-await wait(5000);
+await enterThrough(page, '#btn-start');
 await page.evaluate(() => { window.__game.torchCharge = 42; });
 await page.keyboard.press('Escape');
 await page.waitForFunction(() => window.__game.state === 'paused',
@@ -155,7 +158,7 @@ await page.waitForFunction(() => window.__game.state === 'paused',
 const pauseNote = await page.evaluate(() =>
   document.getElementById('pause-saved').textContent);
 console.log('pause reassurance:', JSON.stringify(pauseNote));
-await page.screenshot({ path: '/tmp/save_pause.png' });
+await page.screenshot({ path: `${shots}/save_pause.png` });
 
 await page.click('#btn-save-quit');
 // The landing page has to come back with the run on offer, not just come back.
@@ -183,10 +186,9 @@ const quitLanded = await (async () => {
   return { onLanding: false, continueOffered: false };
 })();
 console.log('after save & quit:', JSON.stringify(quitLanded));
-await page.screenshot({ path: '/tmp/save_landing.png' });
+await page.screenshot({ path: `${shots}/save_landing.png` });
 
-await page.click('#btn-continue');
-await wait(6000);
+await enterThrough(page, '#btn-continue');
 const torchAfterQuit = await page.evaluate(() => +window.__game.torchCharge.toFixed(0));
 console.log('torch charge carried through quit:', torchAfterQuit);
 await page.evaluate((k) => localStorage.removeItem(k), KEY);
@@ -196,8 +198,7 @@ await page.close();
 
 async function ending(kind) {
   const p = await openTab();
-  await p.click('#btn-start');
-  await wait(5000);
+  await enterThrough(p, '#btn-start');
   const had = await p.evaluate((k) => {
     window.__game.saveRun();
     return !!localStorage.getItem(k);
