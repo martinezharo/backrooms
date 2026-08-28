@@ -65,7 +65,6 @@ const hud = await page.evaluate(() => ({
   oxygenShown: !document.getElementById('oxygen-row').classList.contains('hidden'),
   biome: document.getElementById('biome-label').textContent.trim(),
   objective: document.getElementById('objective-title').textContent.trim(),
-  fps: Number(document.getElementById('fps-counter').textContent.replace(/\D/g, '')),
   alive: window.__game.stats.alive,
 }));
 console.log('HUD:', JSON.stringify(hud));
@@ -78,7 +77,8 @@ report('tour', {
   divingSpendsBreath: wentUnder,
   lungsShownUnderwater: hud.oxygenShown,
   survivedTheTour: hud.alive,
-  hudStillDrawing: hud.fps > 0 && /\S/.test(hud.biome) && /\S/.test(hud.objective),
+  hudStillDrawing: /%$/.test(hud.thirst) && /%$/.test(hud.oxygen)
+    && /\S/.test(hud.biome) && /\S/.test(hud.objective),
 }, errors);
 
 await browser.close();

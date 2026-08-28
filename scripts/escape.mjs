@@ -52,26 +52,27 @@ if (placed.ok) {
     await page.keyboard.press('KeyE');         // step through
 
     const marks = [0.15, 0.35, 0.55, 0.75, 0.92];
-    const shot = new Set();
-    const deadline = Date.now() + 240000;
-    while (Date.now() < deadline) {
-      await wait(600);
-      // a hot reload mid-run wipes __game; bail out instead of throwing
-      const s = await page.evaluate(() => (window.__game
-        ? { state: window.__game.state, progress: window.__game.escape.progress }
-        : { state: 'reloaded', progress: 0 }));
-      if (s.state === 'reloaded') {
-        console.log('page reloaded mid-run (dev server?) — aborting');
-        break;
-      }
-      for (const m of marks) {
-        if (!shot.has(m) && s.progress >= m) {
-          shot.add(m);
-          await page.screenshot({ path: `${out}/escape_fall_${m}.png` });
-        }
-      }
-      if (s.state === 'escaped') { escaped = true; break; }
+    // The game deliberately caps simulation dt. Under SwiftShader a frame can
+    // take more than a second, turning a 17-second fall into five minutes and
+    // making CI measure runner speed rather than the sequence. Advance the
+    // real Escape object in small deterministic steps, rendering every mark.
+    for (const mark of marks) {
+      await page.evaluate((target) => {
+        const g = window.__game;
+        while (g.state === 'escaping' && g.escape.progress < target) g.escape.update(0.1);
+      }, mark);
+      await wait(100);
+      await page.screenshot({ path: `${out}/escape_fall_${mark}.png` });
     }
+
+    await page.evaluate(() => {
+      const g = window.__game;
+      while (g.state === 'escaping' && !g.escape.finished) g.escape.update(0.1);
+    });
+    escaped = await page.waitForFunction(
+      () => window.__game?.state === 'escaped',
+      { timeout: 30000, polling: 100 },
+    ).then(() => true, () => false);
 
     await wait(1000);
     await page.screenshot({ path: `${out}/escape_3_screen.png` });
