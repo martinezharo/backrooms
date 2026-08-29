@@ -102,6 +102,13 @@ describe('wheel — a touchpad', () => {
     expect(input.wheelDelta).toBe(2);
   });
 
+  it('does not lend a dead gesture\'s distance to the next one', () => {
+    glide(20, 3); // 60 px, not enough on its own
+    vi.advanceTimersByTime(200); // and the fingers came off
+    glide(7, 3); // 21 px, not enough either
+    expect(input.wheelDelta).toBe(0);
+  });
+
   it('does not add up a gesture and the one that reverses it', () => {
     glide(15, 4);
     glide(15, -4);
@@ -129,10 +136,27 @@ describe('arrow keys', () => {
     expect(input.down(code)).toBe(true);
   });
 
-  it('keeps the page from scrolling out from under a locked pointer', () => {
-    const e = new KeyboardEvent('keydown', { code: 'ArrowDown', cancelable: true });
+  it.each([
+    ['a first press', false],
+    ['every auto-repeat after it', true],
+  ])('keeps %s from scrolling out from under a locked pointer', (_label, repeat) => {
+    const e = new KeyboardEvent('keydown', { code: 'ArrowDown', cancelable: true, repeat });
     window.dispatchEvent(e);
     expect(e.defaultPrevented).toBe(true);
+  });
+
+  it('holds TAB back on repeat too, or focus walks off mid-game', () => {
+    const e = new KeyboardEvent('keydown', { code: 'Tab', cancelable: true, repeat: true });
+    window.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(true);
+  });
+
+  it('still does not re-latch the press edge on auto-repeat', () => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowLeft' }));
+    input.endFrame();
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowLeft', repeat: true }));
+    expect(input.pressed('ArrowLeft')).toBe(false);
+    expect(input.down('ArrowLeft')).toBe(true);
   });
 
   it('leaves the page alone when the game does not have the pointer', () => {

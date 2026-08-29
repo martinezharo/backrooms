@@ -50,12 +50,14 @@ export class Input {
     this.canvas = canvas;
 
     window.addEventListener('keydown', (e) => {
+      // Keep TAB from moving browser focus, and the arrows — which turn you —
+      // from scrolling, while playing. Held keys auto-repeat, and every repeat
+      // is a fresh event with a default action of its own, so this cannot sit
+      // behind the guard below: only the first press would ever be stopped.
+      if (e.code === 'Tab' || (this.pointerLocked && ARROWS.has(e.code))) e.preventDefault();
       if (e.repeat) return;
       this.keys.add(e.code);
       this.pressedThisFrame.add(e.code);
-      // Keep TAB from moving browser focus, and the arrows — which turn you —
-      // from scrolling the page, while playing.
-      if (e.code === 'Tab' || (this.pointerLocked && ARROWS.has(e.code))) e.preventDefault();
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => {
@@ -120,15 +122,17 @@ export class Input {
     // A hard flick can throw single momentum events bigger than a notch, so
     // size alone is not enough: once a gesture has been seen gliding it keeps
     // that character until the events stop coming.
-    const gliding = Math.abs(px) < NOTCH_PX || now < this.gestureEnds;
-    if (!gliding) {
+    const sameGesture = now < this.gestureEnds;
+    if (Math.abs(px) >= NOTCH_PX && !sameGesture) {
       this.glideAccum = 0;
       this.wheelDelta += Math.sign(px);
       return;
     }
+    // Distance banked by a gesture that has already ended is not this one's to
+    // spend, and neither is distance travelled the other way: two nudges too
+    // small to mean anything must not add up to a step between them.
+    if (!sameGesture || Math.sign(px) !== Math.sign(this.glideAccum)) this.glideAccum = 0;
     this.gestureEnds = now + GESTURE_MS;
-    // turning round mid-gesture is a new gesture, not a shorter old one
-    if (Math.sign(px) !== Math.sign(this.glideAccum)) this.glideAccum = 0;
     this.glideAccum += px;
     if (Math.abs(this.glideAccum) < GLIDE_PX) return;
     // Earned but too soon: spend it anyway. Momentum that keeps re-earning the
