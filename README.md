@@ -112,6 +112,7 @@ identifier, seed, or save data. Disable it with `?telemetry=off`
 | Input | Action |
 |---|---|
 | `WASD` + mouse | Move and look |
+| Arrow keys | Turn and tilt, for touchpads and anyone without a mouse |
 | `Shift` | Sprint |
 | `Space` / `C` | Jump or swim up / crouch or swim down |
 | `E` | Interact, pick up, or use the current objective |
@@ -119,3 +120,7 @@ identifier, seed, or save data. Disable it with `?telemetry=off`
 | `Tab` / `I` | Inventory |
 | `F` / `R` / `G` | Torch / receiver / drop |
 | `Esc` | Pause and save a checkpoint |
+
+Look speed lives on the pause screen and is remembered between runs. A touchpad
+has far less travel than a mousepad, so it usually wants two or three times the
+mouse default.

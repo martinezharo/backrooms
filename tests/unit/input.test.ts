@@ -1,7 +1,10 @@
-// Wheel handling. A mouse reports one notch as one large event; a touchpad
-// reports the same gesture as a long drizzle of small ones, plus a second of
-// momentum after the fingers have left. Counting events instead of distance
-// meant one flick cycled the whole inventory.
+// Wheel and arrow-key handling — the two places a laptop without a mouse used
+// to come off worst.
+//
+// The wheel is the interesting one: a mouse reports one notch as one large
+// event, a touchpad reports the same gesture as a long drizzle of small ones
+// plus a second of momentum after the fingers have left. Counting events
+// instead of distance meant one flick cycled the whole inventory.
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Input } from '../../src/core/Input';
@@ -34,6 +37,7 @@ beforeEach(() => {
   vi.advanceTimersByTime(1000); // past whatever the last test rate-limited
   input.pointerLocked = true;
   wheel(1000); // a notch banks nothing, so this clears the last test's glide
+  window.dispatchEvent(new Event('blur')); // and its held keys
   input.endFrame();
 });
 
@@ -116,5 +120,25 @@ describe('wheel — housekeeping', () => {
     wheel(100);
     input.endFrame();
     expect(input.wheelDelta).toBe(0);
+  });
+});
+
+describe('arrow keys', () => {
+  it.each(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'])('reports %s as held', (code) => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { code }));
+    expect(input.down(code)).toBe(true);
+  });
+
+  it('keeps the page from scrolling out from under a locked pointer', () => {
+    const e = new KeyboardEvent('keydown', { code: 'ArrowDown', cancelable: true });
+    window.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(true);
+  });
+
+  it('leaves the page alone when the game does not have the pointer', () => {
+    input.pointerLocked = false;
+    const e = new KeyboardEvent('keydown', { code: 'ArrowDown', cancelable: true });
+    window.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(false);
   });
 });

@@ -937,6 +937,90 @@ kbd {
 /* the first action draws its own rule — don't stack two */
 .record div:last-child { border-bottom: 0; }
 
+/* the one knob on the pause card, wearing the record's clothes */
+.setting {
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr) 46px;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 clamp(18px, 2.6vh, 28px);
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(226, 210, 150, 0.13);
+}
+.setting-name {
+  font-family: var(--sign);
+  font-weight: 600;
+  font-stretch: 66%;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  opacity: 0.5;
+}
+.setting-value {
+  font-family: var(--typed);
+  font-size: 13px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.setting-hint {
+  grid-column: 1 / -1;
+  margin: 6px 0 0;
+  font-family: var(--typed);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: rgba(226, 210, 150, 0.4);
+}
+
+/* a strip of tape with a marker on it, not a system slider */
+.setting input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.setting input[type='range']:focus-visible {
+  outline: 1px solid rgba(255, 244, 200, 0.75);
+  outline-offset: 2px;
+}
+.setting input[type='range']::-webkit-slider-runnable-track {
+  height: 2px;
+  background: rgba(226, 210, 150, 0.22);
+}
+.setting input[type='range']::-moz-range-track {
+  height: 2px;
+  background: rgba(226, 210, 150, 0.22);
+}
+.setting input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 5px;
+  height: 18px;
+  margin-top: -8px;
+  border: 0;
+  border-radius: 0;
+  background: #e7dcae;
+}
+.setting input[type='range']::-moz-range-thumb {
+  width: 5px;
+  height: 18px;
+  border: 0;
+  border-radius: 0;
+  background: #e7dcae;
+}
+.setting input[type='range']:hover::-webkit-slider-thumb { background: #fff4c8; }
+.setting input[type='range']:hover::-moz-range-thumb { background: #fff4c8; }
+
+/* a marker a thumb can actually catch */
+body.touch .setting input[type='range'] { height: 30px; }
+body.touch .setting input[type='range']::-webkit-slider-thumb {
+  width: 7px; height: 30px; margin-top: -14px;
+}
+body.touch .setting input[type='range']::-moz-range-thumb { width: 7px; height: 30px; }
+
 /* the actions, as a list you run down rather than buttons you hunt for */
 .acts { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .act {

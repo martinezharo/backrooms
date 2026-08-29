@@ -14,6 +14,8 @@ const GLIDE_MS = 140;
 const GESTURE_MS = 120;
 /** Line and page wheel deltas, in pixels, so one threshold can judge them all. */
 const DELTA_MODE_PX = [1, 16, 400];
+/** The keys that turn you, and that a browser would otherwise scroll with. */
+const ARROWS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']);
 
 export class Input {
   private keys = new Set<string>();
@@ -51,8 +53,9 @@ export class Input {
       if (e.repeat) return;
       this.keys.add(e.code);
       this.pressedThisFrame.add(e.code);
-      // Keep TAB from moving browser focus while playing.
-      if (e.code === 'Tab') e.preventDefault();
+      // Keep TAB from moving browser focus, and the arrows — which turn you —
+      // from scrolling the page, while playing.
+      if (e.code === 'Tab' || (this.pointerLocked && ARROWS.has(e.code))) e.preventDefault();
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => {
