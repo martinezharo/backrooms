@@ -37,6 +37,7 @@ import { updateDevHacks } from './devHacks';
 import { Input } from './Input';
 import { noteDepth, noteEscape, noteLevel, noteRunStarted } from './Records';
 import { clearSave, DescentState, loadSave, SaveGame, writeSave } from './Save';
+import { loadSettings } from './Settings';
 import { Telemetry } from './Telemetry';
 import { getRenderQuality } from '../rendering/Quality';
 
@@ -601,7 +602,7 @@ export class Game {
     // ---- player & combat (frozen while an overlay is open, or mid-fall) ----
     if (!uiOpen && !falling) {
       p.canRun = this.stats.thirst > 0;
-      p.update(dt, this.input, this.world);
+      p.update(dt, this.input, this.world, loadSettings().lookSpeed);
       this.combat.update(dt, this.input, p, this.world, this.spawner.enemies);
     }
     this.telemetry.update(

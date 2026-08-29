@@ -516,6 +516,13 @@
       <div class="card">
         <h1 class="verdict">Paused</h1>
         <dl class="record" id="pause-record"></dl>
+        <div class="setting">
+          <label class="setting-name" for="look-speed">Look speed</label>
+          <input id="look-speed" type="range" min="0.4" max="4" step="0.1" value="1"
+                 aria-describedby="look-speed-hint">
+          <output class="setting-value" id="look-speed-value" for="look-speed">1.0&times;</output>
+          <p class="setting-hint" id="look-speed-hint"></p>
+        </div>
         <div class="acts">
           <button id="btn-resume" class="act" type="button">
             <span class="glyph"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg></span>

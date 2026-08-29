@@ -4,7 +4,9 @@
 // what a screen looks like, it only decides what the record says.
 
 import { formatTime, Records } from '../core/Records';
+import { loadSettings, LOOK_SPEED_MAX, LOOK_SPEED_MIN, setLookSpeed } from '../core/Settings';
 import { defForDepth } from '../world/Biomes';
+import { usingTouch } from './controls';
 import { stampTape } from './tape';
 
 const levelName = (depth: number): string => defForDepth(depth).name;
@@ -28,6 +30,9 @@ export class Menus {
   private escapeRecord = document.getElementById('escape-record')!;
   private escapeRecords = document.getElementById('escape-records')!;
   private pauseSaved = document.getElementById('pause-saved')!;
+  private lookSpeed = document.getElementById('look-speed') as HTMLInputElement;
+  private lookSpeedValue = document.getElementById('look-speed-value')!;
+  private lookSpeedHint = document.getElementById('look-speed-hint')!;
 
   onStart: (() => void) | null = null;
   onContinue: (() => void) | null = null;
@@ -45,6 +50,27 @@ export class Menus {
     document.getElementById('btn-respawn')!.addEventListener('click', () => this.onRestart?.());
     document.getElementById('btn-again')!.addEventListener('click', () => this.onNewSeed?.());
     document.getElementById('btn-same-seed')!.addEventListener('click', () => this.onRestart?.());
+
+    const { lookSpeed } = loadSettings();
+    this.lookSpeed.min = String(LOOK_SPEED_MIN);
+    this.lookSpeed.max = String(LOOK_SPEED_MAX);
+    this.lookSpeed.value = String(lookSpeed);
+    this.showLookSpeed(lookSpeed);
+    this.lookSpeed.addEventListener('input', () => {
+      this.showLookSpeed(setLookSpeed(Number(this.lookSpeed.value)));
+    });
+  }
+
+  private showLookSpeed(value: number): void {
+    this.lookSpeedValue.textContent = `${value.toFixed(1)}×`;
+  }
+
+  /**
+   * The slider keeps keyboard focus after you drag it, and the arrows that turn
+   * you would drag it again from inside the game. Hand focus back on the way out.
+   */
+  private dropFocus(): void {
+    this.lookSpeed.blur();
   }
 
   showStart(): void {
@@ -55,6 +81,7 @@ export class Menus {
   }
 
   hideAll(): void {
+    this.dropFocus();
     this.start.classList.add('hidden');
     this.pause.classList.add('hidden');
     this.gameover.classList.add('hidden');
@@ -64,8 +91,14 @@ export class Menus {
   /** Pausing writes a checkpoint; say so, or say why it couldn't. */
   showPause(visible: boolean, saved = true, depth = 0, seconds = 0): void {
     this.pause.classList.toggle('hidden', !visible);
-    if (!visible) return;
+    if (!visible) {
+      this.dropFocus();
+      return;
+    }
 
+    this.lookSpeedHint.textContent = usingTouch()
+      ? 'How far a drag turns you.'
+      : 'A touchpad wants more than a mouse — and the arrow keys turn too.';
     rows(this.pauseRecord, [
       ['standing on', levelName(depth)],
       ['down here', formatTime(seconds)],

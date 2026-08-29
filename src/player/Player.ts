@@ -26,6 +26,15 @@ const CROUCH_STRIDE = 1.05;
 const LAND_MIN_FALL = 2.2;
 /** extra m/s on top of that for a landing to count as the full drop */
 const LAND_FULL_FALL = 6;
+/**
+ * Radians of turn per unit of mouse movement at look speed 1. About 0.13° a
+ * pixel — twice a typical shooter's default, because there is no sensitivity
+ * in the OS layer to lean on.
+ */
+const MOUSE_LOOK = 0.0023;
+/** Radians a second the arrow keys turn and tilt at look speed 1. */
+const KEY_YAW = 2.4;
+const KEY_PITCH = 1.7;
 
 export class Player {
   camera: THREE.PerspectiveCamera;
@@ -107,10 +116,19 @@ export class Player {
     return a === 'hum' || a === 'wrong' ? 'carpet' : 'hard';
   }
 
-  update(dt: number, input: Input, world: World, sensitivity = 0.0023): void {
+  update(dt: number, input: Input, world: World, lookSpeed = 1): void {
     // ---- look ----
+    const sensitivity = MOUSE_LOOK * lookSpeed;
     this.yaw -= input.mouseDX * sensitivity;
     this.pitch -= input.mouseDY * sensitivity;
+    // The arrows turn too. A laptop touchpad runs out of glass long before you
+    // have turned round, and there is nowhere to pick it up and put it back.
+    const yawStep = KEY_YAW * lookSpeed * dt;
+    if (input.down('ArrowLeft')) this.yaw += yawStep;
+    if (input.down('ArrowRight')) this.yaw -= yawStep;
+    const pitchStep = KEY_PITCH * lookSpeed * dt;
+    if (input.down('ArrowUp')) this.pitch += pitchStep;
+    if (input.down('ArrowDown')) this.pitch -= pitchStep;
     this.pitch = Math.max(-1.52, Math.min(1.52, this.pitch));
 
     // ---- stance ----

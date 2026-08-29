@@ -37,12 +37,13 @@ The game uses Three.js and WebGL. World geometry and textures are generated in c
 
 ## Controls
 
-- `WASD` and mouse: move and look.
+- `WASD` and mouse: move and look. The arrow keys turn as well, for touchpads.
 - `Shift`: sprint. `Space`: jump or swim up. `C` or `Ctrl`: crouch or swim down.
 - `E`: interact, pick up, fill a bottle, or use the current objective.
 - Left and right mouse buttons: attack, block, aim, or drink depending on the held item.
 - `Tab` or `I`: inventory. `F`: torch. `R`: receiver. `G`: drop.
-- `Esc`: pause and save a checkpoint.
+- `Esc`: pause and save a checkpoint. Look speed is a slider on that screen, and
+  a touchpad usually wants two or three times the mouse default.
 
 On phones and tablets the game switches to on-screen controls: the left thumb
 steers a stick that sprints when pushed all the way out, the right thumb looks,
