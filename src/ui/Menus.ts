@@ -98,7 +98,7 @@ export class Menus {
 
     this.lookSpeedHint.textContent = usingTouch()
       ? 'How far a drag turns you.'
-      : 'A touchpad wants more than a mouse — and the arrow keys turn too.';
+      : 'How fast the mouse turns you — the arrow keys turn too.';
     rows(this.pauseRecord, [
       ['standing on', levelName(depth)],
       ['down here', formatTime(seconds)],
