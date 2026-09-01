@@ -6,14 +6,9 @@
 // endless in every horizontal direction — the only direction that means
 // anything is down, and every floor has its own price for letting you use it.
 
-export enum BiomeId {
-  Level0 = 0,    // classic yellow rooms — the lobby
-  Level1 = 1,    // the parking under the supermarket that was never built
-  Level37 = 2,   // the poolrooms
-  Level7 = 3,    // thalassophobia, the flood
-  Level2 = 4,    // maintenance tunnels
-  LevelRun = 5,  // the lobby again, and wrong
-}
+import { BiomeId, DEPTHS, LAST_DEPTH } from '../../shared/floors';
+
+export { BiomeId, DEPTHS, DEPTH_COUNT, LAST_DEPTH } from '../../shared/floors';
 
 /** How you land on a floor when you drop onto it from the one above. */
 export type Arrival =
@@ -163,20 +158,6 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
     arrival: 'stand',
   },
 };
-
-/** The descent, in order. A depth index is an index into this. */
-export const DEPTHS: BiomeId[] = [
-  BiomeId.Level0,
-  BiomeId.Level1,
-  BiomeId.Level37,
-  BiomeId.Level7,
-  BiomeId.Level2,
-  BiomeId.LevelRun,
-];
-
-export const DEPTH_COUNT = DEPTHS.length;
-/** The bottom of the building: the only floor with a way out instead of down. */
-export const LAST_DEPTH = DEPTH_COUNT - 1;
 
 /**
  * A depth index arrives from a save file and from the records blob, both of

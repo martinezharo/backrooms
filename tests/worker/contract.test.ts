@@ -1,8 +1,6 @@
 // The game and the Worker are two bundles compiled against two tsconfigs, and
-// nothing type-checks the wire between them. Adding a level or a telemetry
-// event on one side and not the other does not fail to build, does not throw
-// at runtime and does not show up anywhere a player can see — the events are
-// simply rejected at the edge and the dashboard quietly goes flat.
+// the event names and input modes still need an explicit contract check. Floor
+// depth is different: both bundles now import it from shared/floors directly.
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -11,7 +9,6 @@ import { EVENTS, INPUT_MODES, MAX_BODY_BYTES, MAX_DEPTH, TELEMETRY_PATH } from '
 
 const root = process.cwd();
 const client = readFileSync(join(root, 'src/core/Telemetry.ts'), 'utf8');
-const biomes = readFileSync(join(root, 'src/world/Biomes.ts'), 'utf8');
 
 /** The members of a string-literal union, read off the client's own source. */
 function union(name: string): string[] {
@@ -32,17 +29,6 @@ describe('the events', () => {
 
   it('accepts exactly the input modes the game can report', () => {
     expect([...INPUT_MODES].sort()).toEqual(union('InputMode').sort());
-  });
-});
-
-describe('the depth range', () => {
-  it('reaches the bottom of the building', () => {
-    // DEPTHS is the descent, one entry per floor; the deepest index is one less.
-    const depths = /export const DEPTHS: BiomeId\[\] = \[([^\]]+)\]/.exec(biomes);
-    expect(depths, 'DEPTHS has moved or been renamed').not.toBeNull();
-    const floors = depths![1].split(',').filter((s) => s.trim()).length;
-    expect(floors).toBeGreaterThan(0);
-    expect(MAX_DEPTH).toBe(floors - 1);
   });
 });
 
