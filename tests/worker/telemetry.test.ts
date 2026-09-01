@@ -6,7 +6,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { exports } from 'cloudflare:workers';
-import worker from '../../worker/index';
+import worker, { MAX_DEPTH } from '../../worker/index';
 
 type DataPoint = { blobs?: unknown[]; doubles?: number[]; indexes?: string[] };
 
@@ -161,15 +161,18 @@ describe('the fields', () => {
     },
   );
 
-  it.each([0, 1, 2, 3, 4, 5])('accepts depth %d', async (depth) => {
+  it.each(Array.from({ length: MAX_DEPTH + 1 }, (_, depth) => depth))('accepts depth %d', async (depth) => {
     expect((await send(post({ ...valid, depth }))).status).toBe(204);
   });
 
-  it.each([-1, 6, 99, 2.5, NaN, Infinity, null, '3'])('refuses depth %j', async (depth) => {
-    const res = await send(post({ ...valid, depth }));
-    expect(res.status).toBe(400);
-    expect(written).toHaveLength(0);
-  });
+  it.each([-1, MAX_DEPTH + 1, MAX_DEPTH + 94, 2.5, NaN, Infinity, null, '3'])(
+    'refuses depth %j',
+    async (depth) => {
+      const res = await send(post({ ...valid, depth }));
+      expect(res.status).toBe(400);
+      expect(written).toHaveLength(0);
+    },
+  );
 
   it.each([0, 0.4, 3600, 86400])('accepts %d seconds of play', async (seconds) => {
     expect((await send(post({ ...valid, seconds }))).status).toBe(204);
@@ -198,11 +201,14 @@ describe('the fields', () => {
 
 describe('what it records', () => {
   it('writes one point in the documented shape', async () => {
-    await send(post({ event: 'escape', depth: 5, seconds: 640, input: 'touch' }, { cf: { country: 'ES' } }));
+    await send(post(
+      { event: 'escape', depth: MAX_DEPTH, seconds: 640, input: 'touch' },
+      { cf: { country: 'ES' } },
+    ));
     expect(written).toHaveLength(1);
     expect(written[0]).toEqual({
       blobs: ['escape', 'ES', 'touch'],
-      doubles: [1, 5, 640],
+      doubles: [1, MAX_DEPTH, 640],
       indexes: ['ES:escape'],
     });
   });

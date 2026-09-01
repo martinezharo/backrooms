@@ -20,6 +20,10 @@ Each event contains the current depth, elapsed play time, and input mode
 (`keyboard` or `touch`). The Worker adds Cloudflare's two-letter country code.
 If Cloudflare does not provide a country, it records `XX`.
 
+`depth` is a zero-based index into the game's shared floor order. Its accepted
+range is derived from that order, currently `0` through `5`, so adding a floor
+updates the game and Worker contract together.
+
 The implementation deliberately sends no IP address, seed, save data,
 fingerprint, client identifier, or persistent user identifier. The browser
 also disables telemetry when Do Not Track or Global Privacy Control is enabled.

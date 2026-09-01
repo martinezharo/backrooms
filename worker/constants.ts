@@ -14,5 +14,4 @@ export const EVENTS = new Set([
 
 export const INPUT_MODES = new Set(['keyboard', 'touch']);
 
-/** The deepest floor index the game can report; see DEPTHS in world/Biomes. */
-export const MAX_DEPTH = 5;
+export { LAST_DEPTH as MAX_DEPTH } from '../shared/floors';
