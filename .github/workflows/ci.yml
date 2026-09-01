@@ -1,8 +1,12 @@
 name: CI
 
-# Nothing here deploys. The point is that `main` is always in a state that
-# could be deployed: it type-checks, the logic tests pass, it builds, and the
-# game still boots and plays in a real browser.
+# This workflow never deploys, but a push to `main` still reaches production:
+# the Worker is connected to this repository in the Cloudflare dashboard and
+# builds itself from every commit on `main`, a few minutes behind the push and
+# without waiting for these checks. So the job here is to be the reason `main`
+# is always deployable: it type-checks, the logic tests pass, it builds, and
+# the game still boots and plays in a real browser. Nothing needs to run
+# `wrangler deploy` by hand.
 on:
   push:
     branches: [main]
